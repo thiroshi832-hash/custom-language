@@ -123,8 +123,12 @@ Sub UpdateDisplay(msg)
     ' Clamp progress bar to 0-20
     Dim barVal
     barVal = counter
-    If barVal < 0  Then barVal = 0  End If
-    If barVal > 20 Then barVal = 20 End If
+    If barVal < 0 Then
+        barVal = 0
+    End If
+    If barVal > 20 Then
+        barVal = 20
+    End If
     SetProperty bar, "value", CStr(barVal)
 
     ' Status line
