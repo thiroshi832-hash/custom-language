@@ -1,6 +1,7 @@
 #pragma once
 #include <QPlainTextEdit>
 #include <QWidget>
+#include <QSet>
 
 class LineNumberArea;
 
@@ -10,7 +11,20 @@ public:
     explicit CodeEditor(QWidget *parent = nullptr);
 
     void lineNumberAreaPaintEvent(QPaintEvent *event);
+    void lineNumberAreaMousePressEvent(QMouseEvent *event);
     int  lineNumberAreaWidth() const;
+
+    // ── Breakpoints ──────────────────────────────────────────────────────
+    void            toggleBreakpoint(int line);
+    void            clearBreakpoints();
+    const QSet<int> &breakpoints() const { return m_breakpoints; }
+
+    // ── Debug current-execution line (yellow arrow in gutter) ────────────
+    void setDebugLine(int line);   // 0 = clear
+    int  debugLine()  const { return m_debugLine; }
+
+signals:
+    void breakpointsChanged();
 
 protected:
     void resizeEvent(QResizeEvent *event) override;
@@ -21,10 +35,12 @@ private slots:
     void updateLineNumberArea(const QRect &rect, int dy);
 
 private:
-    QWidget *m_lineNumberArea;
+    QWidget  *m_lineNumberArea;
+    QSet<int> m_breakpoints;
+    int       m_debugLine { 0 };
 };
 
-// ── LineNumberArea (paint delegate) ───────────────────────────────────────
+// ── LineNumberArea (paint + mouse delegate) ───────────────────────────────
 
 class LineNumberArea : public QWidget {
 public:
@@ -38,6 +54,9 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override {
         m_editor->lineNumberAreaPaintEvent(event);
+    }
+    void mousePressEvent(QMouseEvent *event) override {
+        m_editor->lineNumberAreaMousePressEvent(event);
     }
 
 private:

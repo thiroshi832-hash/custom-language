@@ -88,25 +88,25 @@ Print "Form closed. Final counter value: " & counter
 ' ── Event handlers ────────────────────────────────────────────────────────
 
 Sub btnInc_Click()
-    Dim step
-    step = 1
+    Dim stepVal
+    stepVal = 1
     If chkDouble = 1 Then
-        step = 2
+        stepVal = 2
     End If
 
-    counter = counter + step
-    Call UpdateDisplay("Incremented by " & step)
+    counter = counter + stepVal
+    Call UpdateDisplay("Incremented by " & stepVal)
 End Sub
 
 Sub btnDec_Click()
-    Dim step
-    step = 1
+    Dim stepVal
+    stepVal = 1
     If chkDouble = 1 Then
-        step = 2
+        stepVal = 2
     End If
 
-    counter = counter - step
-    Call UpdateDisplay("Decremented by " & step)
+    counter = counter - stepVal
+    Call UpdateDisplay("Decremented by " & stepVal)
 End Sub
 
 Sub btnReset_Click()

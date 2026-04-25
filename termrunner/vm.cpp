@@ -361,10 +361,62 @@ bool VM::callBuiltin(const QString &name, int argc) {
     return false; // unknown built-in
 }
 
+// ── Debug pause ───────────────────────────────────────────────────────────
+
+void VM::checkDebugPause(int line) {
+    if (!m_debugMode || line <= 0 || m_shouldStop) return;
+
+    bool shouldPause = false;
+    if (m_stepMode && line != m_lastStepLine)
+        shouldPause = true;
+    else if (m_breakpoints.contains(line))
+        shouldPause = true;
+
+    if (!shouldPause) return;
+
+    m_lastStepLine = line;
+    m_stepMode = false; // reset; debugStep() re-arms it
+
+    // Snapshot variable state for the watch panel
+    QVariantMap locals, globals;
+    if (!m_callStack.isEmpty()) {
+        for (auto it = m_callStack.last().locals.constBegin();
+             it != m_callStack.last().locals.constEnd(); ++it)
+            locals[it.key()] = it.value();
+    }
+    for (auto it = m_globals.constBegin(); it != m_globals.constEnd(); ++it)
+        globals[it.key()] = it.value();
+
+    // Enter pause — blocks until debugContinue/debugStep/debugStop is called
+    m_debugLoop = new QEventLoop(this);
+    emit pausedAt(line, locals, globals);
+    m_debugLoop->exec();
+    delete m_debugLoop;
+    m_debugLoop = nullptr;
+}
+
+void VM::debugContinue() {
+    m_stepMode = false;
+    if (m_debugLoop) m_debugLoop->quit();
+}
+
+void VM::debugStep() {
+    m_stepMode = true;
+    if (m_debugLoop) m_debugLoop->quit();
+}
+
+void VM::debugStop() {
+    m_shouldStop = true;
+    if (m_debugLoop) m_debugLoop->quit();
+    if (m_eventLoop) m_eventLoop->quit();
+}
+
 // ── Single instruction step ───────────────────────────────────────────────
 
 void VM::stepInstruction() {
     const Instruction &ins = m_stream->at(m_pc);
+    checkDebugPause(ins.line);
+    if (m_shouldStop) { m_pc = m_stream->size(); return; }
     m_pc++;
 
     switch (ins.op) {
@@ -482,7 +534,7 @@ void VM::executeSubByName(const QString &name) {
     const int maxSteps = 1000000;
     int steps = 0;
     while (m_pc < m_stream->size() && m_error.isEmpty()
-           && m_callStack.size() > savedDepth) {
+           && m_callStack.size() > savedDepth && !m_shouldStop) {
         if (++steps > maxSteps) {
             setError(QString("Handler '%1' exceeded step limit").arg(name));
             break;
@@ -523,7 +575,7 @@ void VM::run() {
     const int maxSteps = 10000000;
     int steps = 0;
 
-    while (m_pc < m_stream->size() && m_error.isEmpty()) {
+    while (m_pc < m_stream->size() && m_error.isEmpty() && !m_shouldStop) {
         if (++steps > maxSteps) {
             setError("Execution limit reached (possible infinite loop)");
             break;

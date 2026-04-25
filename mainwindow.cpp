@@ -20,6 +20,7 @@
 #include <QMessageBox>
 #include <QTextStream>
 #include <QFile>
+#include <QFileInfo>
 #include <QApplication>
 #include <QKeySequence>
 #include <QAction>
@@ -28,6 +29,10 @@
 #include <QPalette>
 #include <QDateTime>
 #include <QThread>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QDockWidget>
+#include <QMetaObject>
 
 // ── Constructor ───────────────────────────────────────────────────────────
 
@@ -42,7 +47,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupMenus();
     setupToolbar();
     setCurrentFile(QString());
-    resize(1200, 750);
+    resize(1280, 780);
 
     // Dark palette
     QPalette p = qApp->palette();
@@ -92,7 +97,7 @@ void MainWindow::setupUI() {
         "QTabBar::tab:selected { background: #45475a; }");
     m_bottomTabs->setMaximumHeight(220);
 
-    // Splitter
+    // Splitter: editor top, tabs bottom
     auto *splitter = new QSplitter(Qt::Vertical, this);
     splitter->addWidget(m_editor);
     splitter->addWidget(m_bottomTabs);
@@ -100,6 +105,32 @@ void MainWindow::setupUI() {
     splitter->setStretchFactor(1, 1);
 
     setCentralWidget(splitter);
+
+    // ── Debug watch panel (right-side dock) ──────────────────────────────
+    m_watchTable = new QTableWidget(0, 3, this);
+    m_watchTable->setHorizontalHeaderLabels({"Name", "Value", "Scope"});
+    m_watchTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    m_watchTable->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    m_watchTable->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+    m_watchTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    m_watchTable->setSelectionBehavior(QAbstractItemView::SelectRows);
+    m_watchTable->setAlternatingRowColors(true);
+    m_watchTable->setStyleSheet(
+        "QTableWidget { background: #181825; color: #cdd6f4; "
+        "gridline-color: #313244; border: none; } "
+        "QTableWidget::item:alternate { background: #1e1e2e; } "
+        "QHeaderView::section { background: #313244; color: #cdd6f4; "
+        "padding: 3px; border: none; } ");
+    m_watchTable->setFont(QFont("Courier New", 9));
+
+    m_debugDock = new QDockWidget("Variables", this);
+    m_debugDock->setWidget(m_watchTable);
+    m_debugDock->setMinimumWidth(260);
+    m_debugDock->setStyleSheet(
+        "QDockWidget { color: #cdd6f4; } "
+        "QDockWidget::title { background: #313244; padding: 4px; } ");
+    addDockWidget(Qt::RightDockWidgetArea, m_debugDock);
+    m_debugDock->hide(); // shown only when debugger is active
 
     // Status bar label
     m_statusLabel = new QLabel("Ready");
@@ -124,9 +155,21 @@ void MainWindow::setupMenus() {
 
     // Build menu
     QMenu *buildMenu = menuBar()->addMenu("&Build");
-    m_actBuild    = buildMenu->addAction("&Build",        this, &MainWindow::buildCode,   QKeySequence("F7"));
-    m_actRun      = buildMenu->addAction("&Run",          this, &MainWindow::runCode,     QKeySequence("F5"));
-    m_actBuildRun = buildMenu->addAction("Build && &Run", this, &MainWindow::buildAndRun, QKeySequence("Ctrl+F5"));
+    m_actBuild    = buildMenu->addAction("&Build",         this, &MainWindow::buildCode,   QKeySequence("F7"));
+    m_actRun      = buildMenu->addAction("&Run",           this, &MainWindow::runCode,     QKeySequence("F5"));
+    m_actBuildRun = buildMenu->addAction("Build && &Run",  this, &MainWindow::buildAndRun, QKeySequence("Ctrl+F5"));
+
+    // Debug menu
+    QMenu *debugMenu = menuBar()->addMenu("&Debug");
+    m_actDebugRun = debugMenu->addAction("Debug && Run",   this, &MainWindow::debugRun,       QKeySequence("F6"));
+    debugMenu->addSeparator();
+    m_actContinue = debugMenu->addAction("&Continue",      this, &MainWindow::onDebugContinue, QKeySequence("F8"));
+    m_actStep     = debugMenu->addAction("Step &Over",     this, &MainWindow::onDebugStep,     QKeySequence("F10"));
+    m_actStop     = debugMenu->addAction("&Stop Debugger", this, &MainWindow::onDebugStop);
+
+    m_actContinue->setEnabled(false);
+    m_actStep->setEnabled(false);
+    m_actStop->setEnabled(false);
 
     // Tools menu
     QMenu *toolsMenu = menuBar()->addMenu("&Tools");
@@ -140,21 +183,23 @@ void MainWindow::setupMenus() {
 }
 
 void MainWindow::setupToolbar() {
-    QToolBar *tb = addToolBar("Main");
-    tb->setMovable(false);
-    tb->setStyleSheet(
+    QString tbStyle =
         "QToolBar { background: #313244; border: none; spacing: 4px; padding: 2px; } "
         "QToolButton { background: #45475a; color: #cdd6f4; padding: 4px 10px; "
         "border-radius: 3px; min-width: 50px; } "
         "QToolButton:hover { background: #585b70; } "
-        "QToolButton:pressed { background: #6c7086; }");
+        "QToolButton:pressed { background: #6c7086; } "
+        "QToolButton:disabled { color: #585b70; background: #313244; }";
+
+    QToolBar *tb = addToolBar("Main");
+    tb->setMovable(false);
+    tb->setStyleSheet(tbStyle);
 
     tb->addAction(m_actNew);
     tb->addAction(m_actOpen);
     tb->addAction(m_actSave);
     tb->addSeparator();
 
-    // Reuse the same actions as the menu so setEnabled() covers both
     m_actBuild->setText("Build (F7)");
     m_actRun->setText("Run (F5)");
     m_actBuildRun->setText("Build & Run");
@@ -162,6 +207,19 @@ void MainWindow::setupToolbar() {
     tb->addAction(m_actRun);
     tb->addAction(m_actBuildRun);
     tb->addSeparator();
+
+    m_actDebugRun->setText("Debug (F6)");
+    tb->addAction(m_actDebugRun);
+    tb->addSeparator();
+
+    m_actContinue->setText("Continue (F8)");
+    m_actStep->setText("Step (F10)");
+    m_actStop->setText("Stop");
+    tb->addAction(m_actContinue);
+    tb->addAction(m_actStep);
+    tb->addAction(m_actStop);
+    tb->addSeparator();
+
     tb->addAction("UI Designer", this, &MainWindow::openUIDesigner);
 }
 
@@ -296,32 +354,32 @@ void MainWindow::runCode() {
     }
 
     m_console->clear();
-    m_bottomTabs->setCurrentIndex(0); // show console
+    m_bottomTabs->setCurrentIndex(0);
 
-    // Disable run actions while executing to prevent double-start
     m_actRun->setEnabled(false);
     m_actBuildRun->setEnabled(false);
     m_actBuild->setEnabled(false);
+    m_actDebugRun->setEnabled(false);
     m_statusLabel->setText("Running...");
 
-    // Reset any leftover form from a previous run
     m_formRuntime->clearAll();
 
-    // Move VM to a worker thread so the UI stays responsive
-    VM      *vm     = new VM();
+    VM *vm = new VM();
+    m_debugVM = nullptr; // not in debug mode
+
     QThread *thread = new QThread(this);
     vm->moveToThread(thread);
     vm->setStream(&s_stream);
     vm->setFormRuntime(m_formRuntime);
     vm->reset();
 
-    connect(thread, &QThread::started,          vm,     &VM::run);
-    connect(vm,     &VM::output,                this,   &MainWindow::onVMOutput,   Qt::QueuedConnection);
-    connect(vm,     &VM::errorOccurred,         this,   &MainWindow::onVMError,    Qt::QueuedConnection);
-    connect(vm,     &VM::executionFinished,     this,   &MainWindow::onVMFinished, Qt::QueuedConnection);
+    connect(thread, &QThread::started,          vm,   &VM::run);
+    connect(vm,     &VM::output,                this, &MainWindow::onVMOutput,   Qt::QueuedConnection);
+    connect(vm,     &VM::errorOccurred,         this, &MainWindow::onVMError,    Qt::QueuedConnection);
+    connect(vm,     &VM::executionFinished,     this, &MainWindow::onVMFinished, Qt::QueuedConnection);
     connect(vm,     &VM::executionFinished,     thread, &QThread::quit);
     connect(vm,     &VM::errorOccurred,         thread, &QThread::quit);
-    connect(thread, &QThread::finished,         vm,     &VM::deleteLater);
+    connect(thread, &QThread::finished,         vm,   &VM::deleteLater);
     connect(thread, &QThread::finished,         thread, &QThread::deleteLater);
 
     thread->start();
@@ -333,6 +391,58 @@ void MainWindow::buildAndRun() {
         runCode();
 }
 
+// ── Debug run ─────────────────────────────────────────────────────────────
+
+void MainWindow::debugRun() {
+    buildCode();
+    if (!m_statusLabel->text().startsWith("Build OK"))
+        return;
+
+    if (s_stream.size() == 0) return;
+
+    m_console->clear();
+    m_bottomTabs->setCurrentIndex(0);
+    m_debugDock->show();
+    m_watchTable->setRowCount(0);
+
+    m_actRun->setEnabled(false);
+    m_actBuildRun->setEnabled(false);
+    m_actBuild->setEnabled(false);
+    m_actDebugRun->setEnabled(false);
+    m_actStop->setEnabled(true); // can always stop
+    m_statusLabel->setText("Debug running...");
+
+    m_formRuntime->clearAll();
+
+    VM *vm = new VM();
+    m_debugVM = vm; // remember for invokeMethod calls
+
+    QThread *thread = new QThread(this);
+    vm->moveToThread(thread);
+    vm->setStream(&s_stream);
+    vm->setFormRuntime(m_formRuntime);
+    vm->setDebugMode(true);
+    vm->setBreakpoints(m_editor->breakpoints());
+    vm->reset();
+
+    connect(thread, &QThread::started,      vm,   &VM::run);
+    connect(vm, &VM::output,                this, &MainWindow::onVMOutput,   Qt::QueuedConnection);
+    connect(vm, &VM::errorOccurred,         this, &MainWindow::onVMError,    Qt::QueuedConnection);
+    connect(vm, &VM::executionFinished,     this, &MainWindow::onVMFinished, Qt::QueuedConnection);
+    connect(vm, SIGNAL(pausedAt(int,QVariantMap,QVariantMap)),
+            this, SLOT(onVMPausedAt(int,QVariantMap,QVariantMap)),
+            Qt::QueuedConnection);
+    connect(vm, &VM::executionFinished, thread, &QThread::quit);
+    connect(vm, &VM::errorOccurred,     thread, &QThread::quit);
+    connect(thread, &QThread::finished, vm,     &VM::deleteLater);
+    connect(thread, &QThread::finished, thread, &QThread::deleteLater);
+
+    // Clear m_debugVM when VM is destroyed so we don't call a dangling pointer
+    connect(vm, &QObject::destroyed, this, [this]() { m_debugVM = nullptr; });
+
+    thread->start();
+}
+
 // ── VM signal handlers ────────────────────────────────────────────────────
 
 void MainWindow::onVMOutput(const QString &text) {
@@ -342,16 +452,87 @@ void MainWindow::onVMOutput(const QString &text) {
 void MainWindow::onVMError(const QString &msg) {
     m_console->append("<span style='color:#f38ba8;'>" + msg + "</span>");
     m_statusLabel->setText("Runtime error.");
-    m_actRun->setEnabled(true);
-    m_actBuildRun->setEnabled(true);
-    m_actBuild->setEnabled(true);
+    clearDebugState();
 }
 
 void MainWindow::onVMFinished() {
     m_statusLabel->setText("Execution finished.");
+    clearDebugState();
+}
+
+void MainWindow::clearDebugState() {
     m_actRun->setEnabled(true);
     m_actBuildRun->setEnabled(true);
     m_actBuild->setEnabled(true);
+    m_actDebugRun->setEnabled(true);
+    m_actContinue->setEnabled(false);
+    m_actStep->setEnabled(false);
+    m_actStop->setEnabled(false);
+    m_editor->setDebugLine(0);
+    m_debugVM = nullptr;
+}
+
+// ── Debugger pause/control ────────────────────────────────────────────────
+
+void MainWindow::onVMPausedAt(int line, QVariantMap locals, QVariantMap globals) {
+    // Scroll editor to the paused line and show yellow arrow
+    m_editor->setDebugLine(line);
+    m_statusLabel->setText(QString("Paused at line %1").arg(line));
+
+    // Populate watch table: locals first, then globals
+    m_watchTable->setRowCount(0);
+
+    auto addRow = [this](const QString &name, const QVariant &val, const QString &scope) {
+        int row = m_watchTable->rowCount();
+        m_watchTable->insertRow(row);
+        m_watchTable->setItem(row, 0, new QTableWidgetItem(name));
+        m_watchTable->setItem(row, 1, new QTableWidgetItem(val.toString()));
+        QTableWidgetItem *scopeItem = new QTableWidgetItem(scope);
+        scopeItem->setForeground(scope == "Local"
+            ? QColor("#a6e3a1")   // green for locals
+            : QColor("#89b4fa")); // blue for globals
+        m_watchTable->setItem(row, 2, scopeItem);
+    };
+
+    for (auto it = locals.constBegin();  it != locals.constEnd();  ++it)
+        addRow(it.key(), it.value(), "Local");
+    for (auto it = globals.constBegin(); it != globals.constEnd(); ++it)
+        addRow(it.key(), it.value(), "Global");
+
+    // Enable debugger controls
+    m_actContinue->setEnabled(true);
+    m_actStep->setEnabled(true);
+    m_actStop->setEnabled(true);
+
+    m_bottomTabs->setCurrentIndex(0); // keep console visible
+}
+
+void MainWindow::onDebugContinue() {
+    if (!m_debugVM) return;
+    m_actContinue->setEnabled(false);
+    m_actStep->setEnabled(false);
+    m_editor->setDebugLine(0);
+    m_statusLabel->setText("Debug running...");
+    QMetaObject::invokeMethod(m_debugVM, "debugContinue", Qt::QueuedConnection);
+}
+
+void MainWindow::onDebugStep() {
+    if (!m_debugVM) return;
+    m_actContinue->setEnabled(false);
+    m_actStep->setEnabled(false);
+    m_editor->setDebugLine(0);
+    m_statusLabel->setText("Stepping...");
+    QMetaObject::invokeMethod(m_debugVM, "debugStep", Qt::QueuedConnection);
+}
+
+void MainWindow::onDebugStop() {
+    if (!m_debugVM) {
+        clearDebugState();
+        return;
+    }
+    m_statusLabel->setText("Stopping...");
+    QMetaObject::invokeMethod(m_debugVM, "debugStop", Qt::QueuedConnection);
+    // clearDebugState() will be called when VM emits executionFinished/errorOccurred
 }
 
 // ── UI Designer ───────────────────────────────────────────────────────────

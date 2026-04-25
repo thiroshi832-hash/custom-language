@@ -7,6 +7,7 @@
 #include <QVector>
 #include <QVariant>
 #include <QString>
+#include <QSet>
 #include <QEventLoop>
 
 // ── Call frame ────────────────────────────────────────────────────────────
@@ -27,6 +28,11 @@ public:
 
     void setStream(const OpcodeStream *stream);
     void setFormRuntime(FormRuntime *fr) { m_formRuntime = fr; }
+
+    // ── Debug configuration (call before run()) ──────────────────────────
+    void setDebugMode(bool on)                   { m_debugMode = on; }
+    void setBreakpoints(const QSet<int> &bps)    { m_breakpoints = bps; }
+
     void run();
     void reset();
 
@@ -38,11 +44,22 @@ signals:
     void errorOccurred(const QString &msg);
     void executionFinished();
 
+    // Debug signals
+    void pausedAt(int line, QVariantMap locals, QVariantMap globals);
+
+public slots:
+    // Debug control (called from main thread while VM is paused)
+    void debugContinue();
+    void debugStep();
+    void debugStop();
+
 private slots:
+    // Form event loop
     void onEventFired(const QString &handlerName);
     void onFormClosed();
 
 private:
+    // ── Runtime state ────────────────────────────────────────────────────
     const OpcodeStream      *m_stream      { nullptr };
     int                      m_pc          { 0 };
     QStack<QVariant>         m_stack;
@@ -51,6 +68,14 @@ private:
     QString                  m_error;
     FormRuntime             *m_formRuntime { nullptr };
     QEventLoop              *m_eventLoop   { nullptr };
+
+    // ── Debug state ──────────────────────────────────────────────────────
+    bool       m_debugMode    { false };
+    bool       m_stepMode     { false };
+    bool       m_shouldStop   { false };
+    int        m_lastStepLine { -1 };
+    QSet<int>  m_breakpoints;
+    QEventLoop *m_debugLoop   { nullptr };
 
     // ── Stack helpers ────────────────────────────────────────────────────
     void     push(const QVariant &v);
@@ -80,6 +105,7 @@ private:
     // ── Execution helpers ────────────────────────────────────────────────
     void stepInstruction();
     void executeSubByName(const QString &name);
+    void checkDebugPause(int line);
 
     void setError(const QString &msg, int line = 0);
 };
