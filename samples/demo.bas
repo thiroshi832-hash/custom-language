@@ -3,7 +3,7 @@
 ' Author : Hiroshi Tanaka
 ' ============================================================
 
-' ── 1. Variables & basic arithmetic ─────────────────────────────────────
+' ── 1. Variables & basic arithmetic ──────────────────────────────────────
 Print "=== 1. Variables & Arithmetic ==="
 
 Dim a
@@ -40,19 +40,19 @@ Print "=== 2. String Operations ==="
 
 Dim s
 s = "  Hello, CustomLanguage!  "
-Print "Original   : [" & s & "]"
-Print "Trimmed    : [" & Trim(s) & "]"
-Print "UCase      : " & UCase(Trim(s))
-Print "LCase      : " & LCase(Trim(s))
-Print "Len        : " & Len(Trim(s))
-Print "Left(5)    : " & Left(Trim(s), 5)
-Print "Right(14)  : " & Right(Trim(s), 14)
-Print "Mid(8,6)   : " & Mid(Trim(s), 8, 6)
-Print "InStr(Hello): " & InStr(s, "Hello")
-Print "Replace    : " & Replace(Trim(s), "CustomLanguage", "World")
-Print "StrReverse : " & StrReverse("abcde")
+Print "Original      : [" & s & "]"
+Print "Trimmed       : [" & Trim(s) & "]"
+Print "UCase         : " & UCase(Trim(s))
+Print "LCase         : " & LCase(Trim(s))
+Print "Len           : " & Len(Trim(s))
+Print "Left(5)       : " & Left(Trim(s), 5)
+Print "Right(14)     : " & Right(Trim(s), 14)
+Print "Mid(8,6)      : " & Mid(Trim(s), 8, 6)
+Print "InStr(Hello)  : " & InStr(s, "Hello")
+Print "Replace       : " & Replace(Trim(s), "CustomLanguage", "World")
+Print "StrReverse    : " & StrReverse("abcde")
 
-' ── 3. If / ElseIf / Else ───────────────────────────────────────────────
+' ── 3. If / ElseIf / Else ────────────────────────────────────────────────
 Print ""
 Print "=== 3. If / ElseIf / Else ==="
 
@@ -76,27 +76,25 @@ Print ""
 Print "=== 4. For / Next ==="
 
 Dim i
-Dim sum
-sum = 0
+Dim total
+total = 0
 For i = 1 To 10
-    sum = sum + i
+    total = total + i
 Next
-Print "Sum 1..10 = " & sum
+Print "Sum 1..10 = " & total
 
-Print "Even numbers 2-20:"
 Dim line
 line = ""
 For i = 2 To 20 Step 2
     line = line & i & " "
 Next
-Print line
+Print "Even 2-20 : " & line
 
-Print "Countdown 5..1:"
 line = ""
 For i = 5 To 1 Step -1
     line = line & i & " "
 Next
-Print line
+Print "Countdown : " & line
 
 ' ── 5. While / Wend ──────────────────────────────────────────────────────
 Print ""
@@ -104,35 +102,34 @@ Print "=== 5. While / Wend ==="
 
 Dim n
 n = 1
-Dim output
-output = ""
-While n <= 32
-    output = output & n & " "
+Dim out
+out = ""
+While n <= 64
+    out = out & n & " "
     n = n * 2
 Wend
-Print "Powers of 2 up to 32: " & output
+Print "Powers of 2: " & out
 
-' ── 6. Do / Loop (Until & While variants) ────────────────────────────────
+' ── 6. Do / Loop Until ───────────────────────────────────────────────────
 Print ""
-Print "=== 6. Do / Loop ==="
+Print "=== 6. Do / Loop Until ==="
 
-' Collatz sequence starting at 27
 Dim x
 x = 6
 Dim steps
 steps = 0
-output = "6"
+out = "6"
 Do Until x = 1
     If x Mod 2 = 0 Then
         x = x \ 2
     Else
         x = x * 3 + 1
     End If
-    output = output & " -> " & x
+    out = out & " -> " & x
     steps = steps + 1
 Loop
-Print "Collatz(6): " & output
-Print "Steps: " & steps
+Print "Collatz(6): " & out
+Print "Steps     : " & steps
 
 ' ── 7. Functions ─────────────────────────────────────────────────────────
 Print ""
@@ -140,44 +137,40 @@ Print "=== 7. Functions ==="
 
 Function Factorial(n)
     If n <= 1 Then
-        Factorial = 1
-    Else
-        Factorial = n * Factorial(n - 1)
+        Return 1
     End If
+    Return n * Factorial(n - 1)
 End Function
 
 Function IsPrime(n)
     If n < 2 Then
-        IsPrime = False
-        Exit Function
+        Return False
     End If
     Dim d
     For d = 2 To CInt(Sqr(n))
         If n Mod d = 0 Then
-            IsPrime = False
-            Exit Function
+            Return False
         End If
     Next
-    IsPrime = True
+    Return True
 End Function
 
 Function Fibonacci(n)
     If n <= 1 Then
-        Fibonacci = n
-        Exit Function
+        Return n
     End If
-    Dim a2
-    Dim b2
-    Dim tmp
-    a2 = 0
-    b2 = 1
+    Dim fa
+    Dim fb
+    Dim ft
+    fa = 0
+    fb = 1
     Dim k
     For k = 2 To n
-        tmp = a2 + b2
-        a2  = b2
-        b2  = tmp
+        ft = fa + fb
+        fa = fb
+        fb = ft
     Next
-    Fibonacci = b2
+    Return fb
 End Function
 
 Print "Factorials:"
@@ -185,16 +178,16 @@ For i = 0 To 10
     Print "  " & i & "! = " & Factorial(i)
 Next
 
-Print "Primes up to 30:"
+Print "Primes up to 50:"
 line = ""
-For i = 2 To 30
+For i = 2 To 50
     If IsPrime(i) Then
         line = line & i & " "
     End If
 Next
 Print "  " & line
 
-Print "Fibonacci sequence (F0..F12):"
+Print "Fibonacci F0..F12:"
 line = ""
 For i = 0 To 12
     line = line & Fibonacci(i) & " "
@@ -217,17 +210,18 @@ Sub PrintTable(rows, cols)
     Dim r
     Dim c
     For r = 1 To rows
-        line = ""
+        Dim rowLine
+        rowLine = ""
         For c = 1 To cols
             Dim cell
             cell = r * c
             If cell < 10 Then
-                line = line & " " & cell & " "
+                rowLine = rowLine & "  " & cell
             Else
-                line = line & cell & " "
+                rowLine = rowLine & " " & cell
             End If
         Next
-        Print line
+        Print rowLine
     Next
 End Sub
 
@@ -238,57 +232,54 @@ Call PrintTable(5, 5)
 Print ""
 Print "=== 9. Math Built-ins ==="
 
-Print "Abs(-7.5)    = " & Abs(-7.5)
-Print "Int(3.9)     = " & Int(3.9)
-Print "Int(-3.1)    = " & Int(-3.1)
-Print "Fix(-3.9)    = " & Fix(-3.9)
-Print "Sqr(144)     = " & Sqr(144)
-Print "2^10         = " & (2 ^ 10)
-Print "Log(1)       = " & Log(1)
-Print "Exp(1)       = " & Exp(1)
-Print "Sin(0)       = " & Sin(0)
-Print "Cos(0)       = " & Cos(0)
+Print "Abs(-7.5)  = " & Abs(-7.5)
+Print "Int(3.9)   = " & Int(3.9)
+Print "Int(-3.1)  = " & Int(-3.1)
+Print "Fix(-3.9)  = " & Fix(-3.9)
+Print "Sqr(144)   = " & Sqr(144)
+Print "Log(1)     = " & Log(1)
+Print "Exp(1)     = " & Exp(1)
+Print "Sin(0)     = " & Sin(0)
+Print "Cos(0)     = " & Cos(0)
 
-' Approximate Pi via Leibniz series
+' Pi via Leibniz series (1000 terms — good enough for demo)
 Dim pi
 Dim sign
-pi   = 0
-sign = 1
-For i = 0 To 9999
+pi   = 0.0
+sign = 1.0
+For i = 0 To 999
     pi   = pi + sign / (2 * i + 1)
     sign = sign * -1
 Next
 pi = pi * 4
-Print "Pi (10000 terms) = " & pi
+Print "Pi (1000 terms) = " & pi
 
 ' ── 10. Type conversion & checks ─────────────────────────────────────────
 Print ""
 Print "=== 10. Type Conversion & Checks ==="
 
-Print "CInt(3.7)    = " & CInt(3.7)
-Print "CDbl(""2.5"") = " & CDbl("2.5")
-Print "CStr(100)    = " & CStr(100)
-Print "CBool(1)     = " & CBool(1)
-Print "CBool(0)     = " & CBool(0)
-Print "IsNumeric(""42"") = " & IsNumeric("42")
-Print "IsNumeric(""abc"")= " & IsNumeric("abc")
+Print "CInt(3.7)       = " & CInt(3.7)
+Print "CDbl(""2.5"")   = " & CDbl("2.5")
+Print "CStr(100)       = " & CStr(100)
+Print "CBool(1)        = " & CBool(1)
+Print "CBool(0)        = " & CBool(0)
+Print "IsNumeric(""42"")  = " & IsNumeric("42")
+Print "IsNumeric(""abc"") = " & IsNumeric("abc")
 Print "TypeName(42)    = " & TypeName(42)
 Print "TypeName(3.14)  = " & TypeName(3.14)
-Print "TypeName(""hi"") = " & TypeName("hi")
+Print "TypeName(""hi"")= " & TypeName("hi")
 Print "TypeName(True)  = " & TypeName(True)
 
-' ── 11. Nested loops + Exit For ─────────────────────────────────────────
+' ── 11. Nested loops — Pythagorean triples ────────────────────────────────
 Print ""
-Print "=== 11. Nested Loops + Exit ==="
+Print "=== 11. Pythagorean Triples (c <= 25) ==="
 
-' Find all Pythagorean triples with hypotenuse <= 20
 Dim aa
 Dim bb
 Dim cc
-Print "Pythagorean triples (c <= 20):"
-For aa = 1 To 20
-    For bb = aa To 20
-        For cc = bb To 20
+For aa = 1 To 25
+    For bb = aa To 25
+        For cc = bb To 25
             If aa*aa + bb*bb = cc*cc Then
                 Print "  " & aa & "^2 + " & bb & "^2 = " & cc & "^2"
             End If
@@ -296,34 +287,34 @@ For aa = 1 To 20
     Next
 Next
 
-' ── 12. String formatting helpers ────────────────────────────────────────
+' ── 12. String helpers ────────────────────────────────────────────────────
 Print ""
 Print "=== 12. String Helpers ==="
 
-Function PadLeft(s, width)
+Function PadLeft(str, w)
     Dim p
-    p = CStr(s)
-    Do While Len(p) < width
+    p = CStr(str)
+    Do While Len(p) < w
         p = " " & p
     Loop
-    PadLeft = p
+    Return p
 End Function
 
-Function PadRight(s, width)
+Function PadRight(str, w)
     Dim p
-    p = CStr(s)
-    Do While Len(p) < width
+    p = CStr(str)
+    Do While Len(p) < w
         p = p & " "
     Loop
-    PadRight = p
+    Return p
 End Function
 
-Print PadRight("Name",    10) & PadLeft("Score", 6)
-Print String(16, "-")
-Print PadRight("Alice",   10) & PadLeft(98,    6)
-Print PadRight("Bob",     10) & PadLeft(74,    6)
-Print PadRight("Charlie", 10) & PadLeft(85,    6)
-Print PadRight("Diana",   10) & PadLeft(91,    6)
+Print PadRight("Name",    10) & PadLeft("Score", 7)
+Print String(17, "-")
+Print PadRight("Alice",   10) & PadLeft(98,    7)
+Print PadRight("Bob",     10) & PadLeft(74,    7)
+Print PadRight("Charlie", 10) & PadLeft(85,    7)
+Print PadRight("Diana",   10) & PadLeft(91,    7)
 
 Print ""
 Print "=== Done ==="

@@ -266,23 +266,32 @@ void Compiler::compileReturn(ReturnStmt *n) {
 // ── Exit ─────────────────────────────────────────────────────────────────
 
 void Compiler::compileExit(ExitStmt *n) {
-    int jumpIdx = emitOp(Opcode::JUMP, QVariant(-1), n->line);
+    // NOTE: only loop exits use a patchable JUMP.
+    // Sub/Function exits emit RETURN directly — no JUMP, which would land at -1.
     switch (n->target) {
-    case ExitTarget::For:
-        if (!m_forExitStack.isEmpty())
-            m_forExitStack.top().append(jumpIdx);
+    case ExitTarget::For: {
+        int idx = emitOp(Opcode::JUMP, QVariant(-1), n->line);
+        if (!m_forExitStack.isEmpty()) m_forExitStack.top().append(idx);
         break;
-    case ExitTarget::While:
-        if (!m_whileExitStack.isEmpty())
-            m_whileExitStack.top().append(jumpIdx);
+    }
+    case ExitTarget::While: {
+        int idx = emitOp(Opcode::JUMP, QVariant(-1), n->line);
+        if (!m_whileExitStack.isEmpty()) m_whileExitStack.top().append(idx);
         break;
-    case ExitTarget::Do:
-        if (!m_doExitStack.isEmpty())
-            m_doExitStack.top().append(jumpIdx);
+    }
+    case ExitTarget::Do: {
+        int idx = emitOp(Opcode::JUMP, QVariant(-1), n->line);
+        if (!m_doExitStack.isEmpty()) m_doExitStack.top().append(idx);
         break;
+    }
     case ExitTarget::Sub:
-    case ExitTarget::Function:
+        // Sub callers expect no return value on the stack.
         emitOp(Opcode::RETURN, QVariant(0), n->line);
+        break;
+    case ExitTarget::Function:
+        // Function callers always expect a value; push null as the early return.
+        emitOp(Opcode::PUSH_NULL, n->line);
+        emitOp(Opcode::RETURN, QVariant(1), n->line);
         break;
     }
 }
