@@ -1,0 +1,41 @@
+# Qt build artifacts
+*.o
+*.obj
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+*.moc
+Makefile
+Makefile.*
+.qmake.stash
+.qmake.cache
+
+# Build output
+*.exe
+*.dll
+*.a
+*.lib
+debug/
+release/
+build/
+
+# Object script (qmake generated)
+object_script.*
+
+# Qt Creator project files
+*.pro.user
+*.pro.user.*
+*.qbs.user
+*.qbs.user.*
+CMakeLists.txt.user
+
+# Editor / OS noise
+.vs/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+desktop.ini
+.DS_Store
