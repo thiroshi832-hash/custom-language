@@ -90,7 +90,7 @@ Print "Form closed. Final counter value: " & counter
 Sub btnInc_Click()
     Dim stepVal
     stepVal = 1
-    If chkDouble = 1 Then
+    If GetProperty(chkDouble, "checked") = "1" Then
         stepVal = 2
     End If
 
@@ -101,7 +101,7 @@ End Sub
 Sub btnDec_Click()
     Dim stepVal
     stepVal = 1
-    If chkDouble = 1 Then
+    If GetProperty(chkDouble, "checked") = "1" Then
         stepVal = 2
     End If
 
@@ -112,6 +112,12 @@ End Sub
 Sub btnReset_Click()
     counter = 0
     Call UpdateDisplay("Reset to 0")
+End Sub
+
+Sub cboColor_Changed()
+    Dim colorName
+    colorName = GetProperty(cboColor, "text")
+    SetProperty lblStatus, "text", "Color changed to: " & colorName
 End Sub
 
 ' ── Helper sub ────────────────────────────────────────────────────────────

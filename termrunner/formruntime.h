@@ -22,9 +22,10 @@ public slots:
     void initForm   (const QString &title, int w, int h);
     int  createControl(const QString &type, const QString &name,
                        int x, int y, int w, int h);
-    void setProperty(int id, const QString &key, const QString &value);
-    void addItem    (int id, const QString &value);
-    void showForm   ();
+    void    setProperty(int id, const QString &key, const QString &value);
+    QString getProperty(int id, const QString &key);   // read widget state
+    void    addItem    (int id, const QString &value);
+    void    showForm   ();
     void clearAll   ();
 
 signals:

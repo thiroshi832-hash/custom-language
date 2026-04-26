@@ -208,6 +208,22 @@ bool VM::callBuiltin(const QString &name, int argc) {
         return true; // no push
     }
 
+    // result = GetProperty(id, "key")
+    if (n == "getproperty") {
+        if (argc < 2) { setError("GetProperty requires 2 arguments"); return false; }
+        int id      = args[0].toInt();
+        QString key = args[1].toString();
+        QString val;
+        if (m_formRuntime) {
+            QMetaObject::invokeMethod(m_formRuntime, "getProperty",
+                Qt::BlockingQueuedConnection,
+                Q_RETURN_ARG(QString, val),
+                Q_ARG(int, id), Q_ARG(QString, key));
+        }
+        push(QVariant(val));
+        return true;
+    }
+
     // AddItem id, "value"
     if (n == "additem") {
         if (argc < 2) { setError("AddItem requires 2 arguments"); return false; }

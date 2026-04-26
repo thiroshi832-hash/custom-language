@@ -101,7 +101,12 @@ int FormRuntime::createControl(const QString &type, const QString &name,
         widget = rb;
     }
     else if (t == "combobox") {
-        widget = new QComboBox(m_form);
+        auto *cb = new QComboBox(m_form);
+        connect(cb, QOverload<int>::of(&QComboBox::currentIndexChanged),
+                this, [this, name](int) {
+            emit eventFired(name + "_Changed");
+        });
+        widget = cb;
     }
     else if (t == "spinbox") {
         widget = new QSpinBox(m_form);
@@ -193,6 +198,44 @@ void FormRuntime::setProperty(int id, const QString &key, const QString &value) 
         if      (auto *e = qobject_cast<QLineEdit*>(w))  e->setReadOnly(ro);
         else if (auto *t = qobject_cast<QTextEdit*>(w))  t->setReadOnly(ro);
     }
+}
+
+QString FormRuntime::getProperty(int id, const QString &key) {
+    QWidget *w = m_widgets.value(id, nullptr);
+    if (!w) return QString();
+
+    QString k = key.toLower();
+
+    if (k == "text") {
+        if      (auto *l  = qobject_cast<QLabel*>(w))       return l->text();
+        else if (auto *b  = qobject_cast<QPushButton*>(w))  return b->text();
+        else if (auto *c  = qobject_cast<QCheckBox*>(w))    return c->text();
+        else if (auto *r  = qobject_cast<QRadioButton*>(w)) return r->text();
+        else if (auto *e  = qobject_cast<QLineEdit*>(w))    return e->text();
+        else if (auto *t  = qobject_cast<QTextEdit*>(w))    return t->toPlainText();
+        else if (auto *cb = qobject_cast<QComboBox*>(w))    return cb->currentText();
+        else if (auto *g  = qobject_cast<QGroupBox*>(w))    return g->title();
+    }
+    else if (k == "value") {
+        if      (auto *s  = qobject_cast<QSpinBox*>(w))     return QString::number(s->value());
+        else if (auto *p  = qobject_cast<QProgressBar*>(w)) return QString::number(p->value());
+        else if (auto *sl = qobject_cast<QSlider*>(w))      return QString::number(sl->value());
+        else if (auto *cb = qobject_cast<QComboBox*>(w))    return QString::number(cb->currentIndex());
+    }
+    else if (k == "index") {
+        if (auto *cb = qobject_cast<QComboBox*>(w))         return QString::number(cb->currentIndex());
+    }
+    else if (k == "checked") {
+        if      (auto *c = qobject_cast<QCheckBox*>(w))    return c->isChecked() ? "1" : "0";
+        else if (auto *r = qobject_cast<QRadioButton*>(w)) return r->isChecked() ? "1" : "0";
+    }
+    else if (k == "enabled") {
+        return w->isEnabled() ? "1" : "0";
+    }
+    else if (k == "visible") {
+        return w->isVisible() ? "1" : "0";
+    }
+    return QString();
 }
 
 void FormRuntime::addItem(int id, const QString &value) {
