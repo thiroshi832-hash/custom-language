@@ -49,6 +49,19 @@ QVariant VM::loadVar(const QString &name) const {
 void VM::storeVar(const QString &name, const QVariant &val) {
     QString key = name.toLower();
     if (!m_callStack.isEmpty()) {
+        // If the variable was explicitly declared local (via Dim or parameter
+        // binding), update it in the local frame.
+        if (m_callStack.last().locals.contains(key)) {
+            m_callStack.last().locals[key] = val;
+            return;
+        }
+        // If it exists at module (global) scope, update the global — this is
+        // VBScript semantics: undeclared-in-sub names refer to the module level.
+        if (m_globals.contains(key)) {
+            m_globals[key] = val;
+            return;
+        }
+        // Brand-new name: create it as a local.
         m_callStack.last().locals[key] = val;
     } else {
         m_globals[key] = val;

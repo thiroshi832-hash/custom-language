@@ -302,10 +302,12 @@ void Compiler::compileSub(SubDecl *n) {
     int startPos = pos();
     m_stream.registerFunc(n->name, startPos, n->params, false);
 
-    // Bind parameters: they are pushed left-to-right before CALL,
-    // so we store them in reverse order into locals
+    // Bind parameters: args are pushed left-to-right before CALL so we pop
+    // in reverse.  DECLARE_VAR first so storeVar knows this is a local slot
+    // and won't accidentally update a same-named global.
     for (int i = n->params.size() - 1; i >= 0; --i) {
-        emitOp(Opcode::STORE_VAR, n->params[i], n->line);
+        emitOp(Opcode::DECLARE_VAR, n->params[i], n->line);
+        emitOp(Opcode::STORE_VAR,   n->params[i], n->line);
     }
 
     compileStatements(n->body);
@@ -317,7 +319,8 @@ void Compiler::compileFunc(FuncDecl *n) {
     m_stream.registerFunc(n->name, startPos, n->params, true);
 
     for (int i = n->params.size() - 1; i >= 0; --i) {
-        emitOp(Opcode::STORE_VAR, n->params[i], n->line);
+        emitOp(Opcode::DECLARE_VAR, n->params[i], n->line);
+        emitOp(Opcode::STORE_VAR,   n->params[i], n->line);
     }
 
     compileStatements(n->body);
