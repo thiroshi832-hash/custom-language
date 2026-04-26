@@ -11,7 +11,11 @@ class QAction;
 class QTableWidget;
 class QDockWidget;
 class QToolButton;
+class QStackedWidget;
 class FormRuntime;
+class UIDesigner;
+class LocalCopilot;
+class CopilotPanel;
 class VM;
 
 class MainWindow : public QMainWindow {
@@ -41,30 +45,44 @@ private slots:
     void onDebugStep();
     void onDebugStop();
 
+protected:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+
 private:
     void setupUI();
     void setupMenus();
     void setupToolbar();
+    void setupCopilot();
     void setCurrentFile(const QString &path);
     bool maybeSave();
     void clearDebugState();
 
     // ── Widgets ──────────────────────────────────────────────────────────
-    CodeEditor   *m_editor        { nullptr };
-    QTextEdit    *m_console       { nullptr };
-    QTextEdit    *m_bytecodeView  { nullptr };
-    QTabWidget   *m_bottomTabs    { nullptr };
-    QLabel       *m_statusLabel   { nullptr };
-    QLabel       *m_cursorLabel   { nullptr };  // line:col indicator
+    CodeEditor    *m_editor        { nullptr };
+    QTextEdit     *m_console       { nullptr };
+    QTextEdit     *m_bytecodeView  { nullptr };
+    QTabWidget    *m_bottomTabs    { nullptr };
+    QLabel        *m_statusLabel   { nullptr };
+    QLabel        *m_cursorLabel   { nullptr };  // line:col indicator
 
     // Left mode bar
-    QToolButton  *m_btnModeEdit   { nullptr };
-    QToolButton  *m_btnModeDebug  { nullptr };
-    QToolButton  *m_btnModeDesign { nullptr };
+    QToolButton   *m_btnModeEdit   { nullptr };
+    QToolButton   *m_btnModeDebug  { nullptr };
+    QToolButton   *m_btnModeDesign { nullptr };
+
+    // Central stacked widget (Edit/Debug view vs. Design view)
+    QStackedWidget *m_centralStack { nullptr };
+    UIDesigner     *m_uiDesigner   { nullptr };
 
     // Debug watch panel (right-side dock)
-    QDockWidget  *m_debugDock     { nullptr };
-    QTableWidget *m_watchTable    { nullptr };
+    QDockWidget   *m_debugDock     { nullptr };
+    QTableWidget  *m_watchTable    { nullptr };
+
+    // ── Copilot ───────────────────────────────────────────────────────────
+    LocalCopilot  *m_localCopilot   { nullptr };
+    CopilotPanel  *m_copilotPanel   { nullptr };
+    QDockWidget   *m_copilotDock    { nullptr };
+    QLabel        *m_copilotLabel   { nullptr }; // status-bar indicator
 
     // ── State ─────────────────────────────────────────────────────────────
     QString      m_currentFile;

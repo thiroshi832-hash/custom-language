@@ -1,5 +1,5 @@
 #pragma once
-#include <QMainWindow>
+#include <QWidget>
 #include <QString>
 
 class DesignCanvas;
@@ -8,40 +8,40 @@ class QListWidget;
 class QTableWidget;
 class QLabel;
 class QLineEdit;
-class QSpinBox;
+class QToolBar;
 class QAction;
 
-class UIDesigner : public QMainWindow {
+class UIDesigner : public QWidget {
     Q_OBJECT
 public:
     explicit UIDesigner(QWidget *parent = nullptr);
 
+    // Called by MainWindow to wire "New Form" / "Generate Code" menu items
+    void newForm();
+    void generateCode();
+
 private slots:
     void onItemSelected(WidgetItem *item);
     void onPropChanged(int row, int col);
-    void generateCode();
-    void newForm();
     void onToolSelected(const QString &type);
     void selectTool();
 
 private:
     void setupUI();
-    void setupToolbar();
-    void setupPalette();
-    void setupProperties();
     void populateProps(WidgetItem *item);
     void applyFormSize();
+    void setStatus(const QString &msg);
 
-    DesignCanvas *m_canvas;
-    QListWidget  *m_palette;
-    QTableWidget *m_propTable;
-    QLabel       *m_statusPos;
-    QLineEdit    *m_formWEdit;
-    QLineEdit    *m_formHEdit;
-    QLabel       *m_formTitleEdit;
+    DesignCanvas *m_canvas       { nullptr };
+    QListWidget  *m_palette      { nullptr };
+    QTableWidget *m_propTable    { nullptr };
+    QLabel       *m_statusLabel  { nullptr };
+    QLabel       *m_statusPos    { nullptr };
+    QLineEdit    *m_formWEdit    { nullptr };
+    QLineEdit    *m_formHEdit    { nullptr };
 
-    WidgetItem   *m_selectedItem { nullptr };
+    WidgetItem   *m_selectedItem  { nullptr };
     bool          m_updatingProps { false };
 
-    QAction *m_actSelect;
+    QAction      *m_actSelect    { nullptr };
 };

@@ -3,7 +3,7 @@ CONFIG += c++11
 TARGET = CustomLanguage
 TEMPLATE = app
 
-INCLUDEPATH += . lang termrunner uidesigner
+INCLUDEPATH += . lang termrunner uidesigner copilot
 
 SOURCES += \
     main.cpp \
@@ -18,7 +18,9 @@ SOURCES += \
     termrunner/vm.cpp \
     uidesigner/widgetitem.cpp \
     uidesigner/designcanvas.cpp \
-    uidesigner/uidesigner.cpp
+    uidesigner/uidesigner.cpp \
+    copilot/localcopilot.cpp \
+    copilot/copilotpanel.cpp
 
 HEADERS += \
     mainwindow.h \
@@ -35,4 +37,6 @@ HEADERS += \
     termrunner/vm.h \
     uidesigner/widgetitem.h \
     uidesigner/designcanvas.h \
-    uidesigner/uidesigner.h
+    uidesigner/uidesigner.h \
+    copilot/localcopilot.h \
+    copilot/copilotpanel.h

@@ -5,26 +5,32 @@
 #include <QListWidget>
 #include <QTableWidget>
 #include <QHeaderView>
-#include <QDockWidget>
 #include <QToolBar>
-#include <QStatusBar>
 #include <QLabel>
 #include <QLineEdit>
-#include <QSpinBox>
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGroupBox>
 #include <QAction>
-#include <QMenu>
-#include <QMenuBar>
 #include <QMessageBox>
-#include <QFileDialog>
 #include <QTextEdit>
 #include <QApplication>
-#include <QScrollArea>
 #include <QSplitter>
 #include <QClipboard>
+#include <QMainWindow>     // only for the generate-code viewer child window
+
+// ── Qt Creator colour constants (match mainwindow.cpp) ────────────────────
+namespace QCD {
+    static const char BG[]      = "#2b2b2b";
+    static const char PANEL[]   = "#3c3f41";
+    static const char ACTIVE[]  = "#4e5254";
+    static const char BORDER[]  = "#323232";
+    static const char TEXT[]    = "#a9b7c6";
+    static const char DIM[]     = "#606366";
+    static const char ACCENT[]  = "#3592c4";
+    static const char CONSOLE[] = "#1e1e1e";
+}
 
 // ── Widget palette entries ────────────────────────────────────────────────
 
@@ -82,35 +88,93 @@ static QString propValue(WidgetItem *item, const QString &key) {
 // ── UIDesigner ────────────────────────────────────────────────────────────
 
 UIDesigner::UIDesigner(QWidget *parent)
-    : QMainWindow(parent)
+    : QWidget(parent)
 {
-    setWindowTitle("UI Designer");
-    resize(1200, 800);
     setupUI();
-    setupToolbar();
 }
 
 void UIDesigner::setupUI() {
-    // ── Central canvas ───────────────────────────────────────────────────
-    m_canvas = new DesignCanvas(this);
-    setCentralWidget(m_canvas);
+    // ── Overall layout: toolbar / splitter / status-bar ───────────────────
+    auto *mainLayout = new QVBoxLayout(this);
+    mainLayout->setContentsMargins(0, 0, 0, 0);
+    mainLayout->setSpacing(0);
 
-    connect(m_canvas, &DesignCanvas::itemSelected, this, &UIDesigner::onItemSelected);
-    connect(m_canvas, &DesignCanvas::mouseMoved, this, [this](int x, int y){
-        m_statusPos->setText(QString("  x: %1  y: %2").arg(x).arg(y));
+    // ── Toolbar ───────────────────────────────────────────────────────────
+    auto *toolbar = new QToolBar(this);
+    toolbar->setMovable(false);
+    toolbar->setStyleSheet(
+        QString("QToolBar { background:%1; border:none; border-bottom:1px solid %2;"
+                "  spacing:1px; padding:2px 4px; }"
+                "QToolButton { background:transparent; color:%3;"
+                "  border:none; padding:4px 8px; font-size:9pt; }"
+                "QToolButton:hover { background:%4; }"
+                "QToolButton:checked { background:%5; color:#ffffff; }"
+                "QToolBar::separator { background:%2; width:1px; margin:4px 3px; }")
+        .arg(QCD::PANEL).arg(QCD::BORDER).arg(QCD::TEXT)
+        .arg(QCD::ACTIVE).arg(QCD::ACCENT));
+
+    m_actSelect = toolbar->addAction("Arrow");
+    m_actSelect->setCheckable(true);
+    m_actSelect->setChecked(true);
+    m_actSelect->setToolTip("Select / Move  (Esc)");
+    connect(m_actSelect, &QAction::triggered, this, &UIDesigner::selectTool);
+
+    toolbar->addSeparator();
+    toolbar->addAction("Delete", this, [this]{ m_canvas->deleteSelected(); })->setToolTip("Delete selected (Del)");
+    toolbar->addSeparator();
+
+    auto *gridAct = toolbar->addAction("Grid");
+    gridAct->setCheckable(true);
+    gridAct->setChecked(true);
+    connect(gridAct, &QAction::toggled, this, [this](bool on){
+        m_canvas->formScene()->setGridVisible(on);
     });
 
-    // ── Left dock — Palette ───────────────────────────────────────────────
-    auto *paletteDock = new QDockWidget("Widget Box", this);
-    paletteDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    paletteDock->setMinimumWidth(160);
-    paletteDock->setMaximumWidth(200);
+    toolbar->addSeparator();
+    toolbar->addAction("Clear All", this, [this]{
+        m_canvas->formScene()->clear();
+        onItemSelected(nullptr);
+        setStatus("Canvas cleared.");
+    });
+    toolbar->addSeparator();
+    toolbar->addAction("New Form",      this, &UIDesigner::newForm);
+    toolbar->addAction("Generate Code", this, &UIDesigner::generateCode);
+
+    mainLayout->addWidget(toolbar);
+
+    // ── Horizontal splitter: palette | canvas | properties ────────────────
+    auto *hSplit = new QSplitter(Qt::Horizontal, this);
+    hSplit->setStyleSheet(
+        QString("QSplitter::handle { background:%1; width:1px; }").arg(QCD::BORDER));
+
+    // Left panel — Widget palette
+    auto *palettePanel = new QWidget;
+    palettePanel->setMinimumWidth(150);
+    palettePanel->setMaximumWidth(200);
+    palettePanel->setStyleSheet(
+        QString("QWidget { background:%1; }").arg(QCD::PANEL));
+
+    auto *palLayout = new QVBoxLayout(palettePanel);
+    palLayout->setContentsMargins(0, 0, 0, 0);
+    palLayout->setSpacing(0);
+
+    auto *palTitle = new QLabel("  Widget Box");
+    palTitle->setFixedHeight(24);
+    palTitle->setStyleSheet(
+        QString("QLabel { background:%1; color:%2; font-weight:bold;"
+                "  border-bottom:1px solid %3; padding:2px; }")
+        .arg(QCD::BORDER).arg(QCD::TEXT).arg(QCD::BORDER));
+    palLayout->addWidget(palTitle);
 
     m_palette = new QListWidget;
     m_palette->setIconSize(QSize(18, 18));
     m_palette->setSpacing(1);
+    m_palette->setStyleSheet(
+        QString("QListWidget { background:%1; color:%2; border:none; }"
+                "QListWidget::item:selected { background:%3; }"
+                "QListWidget::item:hover    { background:%4; }")
+        .arg(QCD::BG).arg(QCD::TEXT).arg(QCD::ACTIVE).arg(QCD::BORDER));
 
-    // Populate palette with categories
     QString lastCat;
     for (const auto &e : s_palette) {
         if (e.category != lastCat) {
@@ -118,8 +182,8 @@ void UIDesigner::setupUI() {
             catItem->setFlags(Qt::NoItemFlags);
             QFont f = catItem->font(); f.setBold(true);
             catItem->setFont(f);
-            catItem->setBackground(QColor("#d0d0e8"));
-            catItem->setForeground(QColor("#333366"));
+            catItem->setBackground(QColor(QCD::BORDER));
+            catItem->setForeground(QColor(QCD::ACCENT));
             m_palette->addItem(catItem);
             lastCat = e.category;
         }
@@ -133,24 +197,48 @@ void UIDesigner::setupUI() {
         if (!type.isEmpty()) onToolSelected(type);
     });
 
-    paletteDock->setWidget(m_palette);
-    addDockWidget(Qt::LeftDockWidgetArea, paletteDock);
+    palLayout->addWidget(m_palette);
+    hSplit->addWidget(palettePanel);
 
-    // ── Right dock — Property Editor ──────────────────────────────────────
-    auto *propDock = new QDockWidget("Property Editor", this);
-    propDock->setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable);
-    propDock->setMinimumWidth(230);
-    propDock->setMaximumWidth(300);
+    // Centre — Design canvas
+    m_canvas = new DesignCanvas(this);
+    hSplit->addWidget(m_canvas);
 
-    auto *propWidget = new QWidget;
-    auto *propLayout = new QVBoxLayout(propWidget);
-    propLayout->setContentsMargins(4, 4, 4, 4);
-    propLayout->setSpacing(4);
+    connect(m_canvas, &DesignCanvas::itemSelected, this, &UIDesigner::onItemSelected);
+    connect(m_canvas, &DesignCanvas::mouseMoved, this, [this](int x, int y){
+        m_statusPos->setText(QString("  x: %1  y: %2  ").arg(x).arg(y));
+    });
 
-    // Form size controls at top
-    auto *formBox = new QGroupBox("Form");
+    // Right panel — Property editor
+    auto *propPanel = new QWidget;
+    propPanel->setMinimumWidth(220);
+    propPanel->setMaximumWidth(300);
+    auto *propLayout = new QVBoxLayout(propPanel);
+    propLayout->setContentsMargins(0, 0, 0, 0);
+    propLayout->setSpacing(0);
+
+    auto *propTitle = new QLabel("  Property Editor");
+    propTitle->setFixedHeight(24);
+    propTitle->setStyleSheet(
+        QString("QLabel { background:%1; color:%2; font-weight:bold;"
+                "  border-bottom:1px solid %3; padding:2px; }")
+        .arg(QCD::BORDER).arg(QCD::TEXT).arg(QCD::BORDER));
+    propLayout->addWidget(propTitle);
+
+    // Form size controls
+    auto *formBox = new QGroupBox("Form Size");
+    formBox->setStyleSheet(
+        QString("QGroupBox { color:%1; border:1px solid %2; margin-top:10px;"
+                "  border-radius:3px; }"
+                "QGroupBox::title { subcontrol-origin:margin; left:8px; color:%3; }"
+                "QLineEdit { background:%4; color:%1; border:1px solid %2;"
+                "  padding:2px; border-radius:2px; }"
+                "QPushButton { background:%2; color:%1; border:none;"
+                "  padding:3px 8px; border-radius:2px; }"
+                "QPushButton:hover { background:%5; }")
+        .arg(QCD::TEXT).arg(QCD::BORDER).arg(QCD::ACCENT).arg(QCD::BG).arg(QCD::ACTIVE));
     auto *formLay = new QHBoxLayout(formBox);
-    formLay->setContentsMargins(4, 4, 4, 4);
+    formLay->setContentsMargins(6, 4, 6, 4);
     formLay->addWidget(new QLabel("W:"));
     m_formWEdit = new QLineEdit("640"); m_formWEdit->setMaximumWidth(50);
     formLay->addWidget(m_formWEdit);
@@ -161,7 +249,12 @@ void UIDesigner::setupUI() {
     applyBtn->setMaximumWidth(45);
     connect(applyBtn, &QPushButton::clicked, this, &UIDesigner::applyFormSize);
     formLay->addWidget(applyBtn);
-    propLayout->addWidget(formBox);
+
+    auto *formBoxWrapper = new QWidget;
+    auto *fbwl = new QVBoxLayout(formBoxWrapper);
+    fbwl->setContentsMargins(4, 4, 4, 0);
+    fbwl->addWidget(formBox);
+    propLayout->addWidget(formBoxWrapper);
 
     // Property table
     m_propTable = new QTableWidget(0, 2);
@@ -172,98 +265,60 @@ void UIDesigner::setupUI() {
     m_propTable->verticalHeader()->setDefaultSectionSize(22);
     m_propTable->setSelectionMode(QAbstractItemView::SingleSelection);
     m_propTable->setEditTriggers(QAbstractItemView::DoubleClicked | QAbstractItemView::SelectedClicked);
-    propLayout->addWidget(m_propTable);
-
+    m_propTable->setStyleSheet(
+        QString("QTableWidget { background:%1; color:%2; gridline-color:%3; border:none; }"
+                "QTableWidget::item:selected { background:%4; }"
+                "QHeaderView::section { background:%3; color:%2; padding:3px; border:none; }")
+        .arg(QCD::BG).arg(QCD::TEXT).arg(QCD::BORDER).arg(QCD::ACTIVE));
     connect(m_propTable, &QTableWidget::cellChanged, this, &UIDesigner::onPropChanged);
+    propLayout->addWidget(m_propTable, 1);
 
     // Generate Code button
     auto *genBtn = new QPushButton("Generate Code");
-    genBtn->setStyleSheet("QPushButton { background: #3584e4; color: white; "
-                          "padding: 5px; border-radius: 3px; font-weight: bold; }");
+    genBtn->setStyleSheet(
+        QString("QPushButton { background:%1; color:#ffffff; padding:6px;"
+                "  border:none; border-radius:3px; font-weight:bold; }"
+                "QPushButton:hover { background:%2; }")
+        .arg(QCD::ACCENT).arg(QCD::ACTIVE));
     connect(genBtn, &QPushButton::clicked, this, &UIDesigner::generateCode);
-    propLayout->addWidget(genBtn);
+    auto *genWrapper = new QWidget;
+    auto *gwl = new QVBoxLayout(genWrapper);
+    gwl->setContentsMargins(4, 4, 4, 4);
+    gwl->addWidget(genBtn);
+    propLayout->addWidget(genWrapper);
 
-    propDock->setWidget(propWidget);
-    addDockWidget(Qt::RightDockWidgetArea, propDock);
+    hSplit->addWidget(propPanel);
 
-    // ── Status bar ────────────────────────────────────────────────────────
-    m_statusPos = new QLabel("  x: 0  y: 0");
-    statusBar()->addPermanentWidget(m_statusPos);
-    statusBar()->showMessage("Select a widget from the palette and click on the canvas to place it.");
+    // Splitter proportions: palette narrow, canvas stretchy, props narrow
+    hSplit->setStretchFactor(0, 0);
+    hSplit->setStretchFactor(1, 1);
+    hSplit->setStretchFactor(2, 0);
 
-    // ── Dark style ────────────────────────────────────────────────────────
-    setStyleSheet(
-        "QMainWindow, QDockWidget { background: #2a2a3e; }"
-        "QDockWidget::title { background: #313244; color: #cdd6f4; padding: 4px; }"
-        "QListWidget { background: #1e1e2e; color: #cdd6f4; border: none; }"
-        "QListWidget::item:selected { background: #45475a; }"
-        "QListWidget::item:hover { background: #313244; }"
-        "QTableWidget { background: #1e1e2e; color: #cdd6f4; gridline-color: #313244; }"
-        "QTableWidget::item:selected { background: #45475a; }"
-        "QHeaderView::section { background: #313244; color: #cdd6f4; padding: 3px; border: none; }"
-        "QGroupBox { color: #cdd6f4; border: 1px solid #45475a; margin-top: 8px; "
-        "            border-radius: 3px; padding-top: 4px; }"
-        "QGroupBox::title { subcontrol-origin: margin; left: 8px; color: #89b4fa; }"
-        "QLineEdit { background: #313244; color: #cdd6f4; border: 1px solid #45475a; "
-        "            padding: 2px; border-radius: 2px; }"
-        "QPushButton { background: #45475a; color: #cdd6f4; border: none; "
-        "              padding: 4px 8px; border-radius: 3px; }"
-        "QPushButton:hover { background: #585b70; }"
-        "QStatusBar { background: #313244; color: #cdd6f4; }"
-        "QToolBar { background: #313244; border: none; spacing: 3px; padding: 2px; }"
-        "QToolButton { background: #45475a; color: #cdd6f4; padding: 4px 8px; "
-        "              border-radius: 3px; }"
-        "QToolButton:hover    { background: #585b70; }"
-        "QToolButton:checked  { background: #3584e4; color: white; }"
-        "QMenuBar { background: #313244; color: #cdd6f4; }"
-        "QMenuBar::item:selected { background: #45475a; }"
-        "QMenu { background: #313244; color: #cdd6f4; }"
-        "QMenu::item:selected { background: #45475a; }"
-        "QLabel { color: #cdd6f4; }"
-    );
+    mainLayout->addWidget(hSplit, 1);
+
+    // ── Status bar at the bottom ──────────────────────────────────────────
+    auto *statusWidget = new QWidget;
+    statusWidget->setFixedHeight(22);
+    statusWidget->setStyleSheet(
+        QString("QWidget { background:%1; border-top:1px solid %2; }")
+        .arg(QCD::PANEL).arg(QCD::BORDER));
+    auto *statusLay = new QHBoxLayout(statusWidget);
+    statusLay->setContentsMargins(4, 0, 4, 0);
+    statusLay->setSpacing(0);
+
+    m_statusLabel = new QLabel("Select a widget from the palette and click on the canvas to place it.");
+    m_statusLabel->setStyleSheet(QString("color:%1; background:transparent;").arg(QCD::TEXT));
+    statusLay->addWidget(m_statusLabel, 1);
+
+    m_statusPos = new QLabel("  x: 0  y: 0  ");
+    m_statusPos->setStyleSheet(QString("color:%1; background:transparent;").arg(QCD::DIM));
+    statusLay->addWidget(m_statusPos);
+
+    mainLayout->addWidget(statusWidget);
 }
 
-void UIDesigner::setupToolbar() {
-    QToolBar *tb = addToolBar("Tools");
-    tb->setMovable(false);
-
-    m_actSelect = tb->addAction("Arrow");
-    m_actSelect->setCheckable(true);
-    m_actSelect->setChecked(true);
-    m_actSelect->setToolTip("Select / Move  (Esc)");
-    connect(m_actSelect, &QAction::triggered, this, &UIDesigner::selectTool);
-
-    tb->addSeparator();
-    tb->addAction("Delete", this, [this]{ m_canvas->deleteSelected(); })->setToolTip("Delete selected (Del)");
-    tb->addSeparator();
-
-    auto *gridAct = tb->addAction("Grid");
-    gridAct->setCheckable(true);
-    gridAct->setChecked(true);
-    connect(gridAct, &QAction::toggled, m_canvas->formScene(), &FormScene::setGridVisible);
-
-    tb->addSeparator();
-    tb->addAction("Clear All", this, [this]{
-        m_canvas->formScene()->clear();
-        onItemSelected(nullptr);
-        statusBar()->showMessage("Canvas cleared.");
-    });
-    tb->addSeparator();
-    tb->addAction("Generate Code", this, &UIDesigner::generateCode);
-
-    // Menu
-    auto *fileMenu = menuBar()->addMenu("&File");
-    fileMenu->addAction("New Form", this, &UIDesigner::newForm, QKeySequence::New);
-    fileMenu->addSeparator();
-    fileMenu->addAction("Generate && Copy Code", this, &UIDesigner::generateCode);
-    fileMenu->addSeparator();
-    fileMenu->addAction("Close", this, &QWidget::close, QKeySequence::Close);
-
-    auto *editMenu = menuBar()->addMenu("&Edit");
-    editMenu->addAction("Delete Selected", this, [this]{ m_canvas->deleteSelected(); }, QKeySequence::Delete);
-    editMenu->addAction("Select All", this, [this]{
-        for (auto *it : m_canvas->formScene()->items()) it->setSelected(true);
-    }, QKeySequence::SelectAll);
+void UIDesigner::setStatus(const QString &msg) {
+    if (m_statusLabel) m_statusLabel->setText(msg);
 }
 
 // ── Tool selection ────────────────────────────────────────────────────────
@@ -272,14 +327,13 @@ void UIDesigner::selectTool() {
     m_canvas->setActiveTool(QString());
     m_actSelect->setChecked(true);
     m_palette->clearSelection();
-    statusBar()->showMessage("Select mode. Click a widget to select it.");
+    setStatus("Select mode. Click a widget to select it.");
 }
 
 void UIDesigner::onToolSelected(const QString &type) {
     m_canvas->setActiveTool(type);
     m_actSelect->setChecked(false);
-    statusBar()->showMessage(
-        QString("Click on the canvas to place a %1. Press Esc to return to select mode.").arg(type));
+    setStatus(QString("Click on the canvas to place a %1. Press Esc to return to select mode.").arg(type));
 }
 
 // ── Property panel ────────────────────────────────────────────────────────
@@ -288,8 +342,7 @@ void UIDesigner::onItemSelected(WidgetItem *item) {
     m_selectedItem = item;
     populateProps(item);
     if (item)
-        statusBar()->showMessage(
-            QString("%1 \"%2\"  |  x:%3  y:%4  w:%5  h:%6")
+        setStatus(QString("%1 \"%2\"  |  x:%3  y:%4  w:%5  h:%6")
             .arg(item->widgetType()).arg(item->objectName())
             .arg((int)item->x()).arg((int)item->y())
             .arg((int)item->itemW()).arg((int)item->itemH()));
@@ -308,7 +361,7 @@ void UIDesigner::populateProps(WidgetItem *item) {
         const QString &key = keys[i];
         auto *keyItem = new QTableWidgetItem(key);
         keyItem->setFlags(Qt::ItemIsEnabled);
-        keyItem->setForeground(QColor("#89b4fa"));
+        keyItem->setForeground(QColor(QCD::ACCENT));
         m_propTable->setItem(i, 0, keyItem);
 
         auto *valItem = new QTableWidgetItem(propValue(item, key));
@@ -331,7 +384,6 @@ void UIDesigner::onPropChanged(int row, int col) {
     if (key == "objectName") {
         m_selectedItem->setObjectName(val);
     } else if (key == "geometry") {
-        // Parse "x, y, w, h"
         QStringList parts = val.split(',');
         if (parts.size() == 4) {
             m_selectedItem->setPos(parts[0].trimmed().toDouble(),
@@ -343,14 +395,13 @@ void UIDesigner::onPropChanged(int row, int col) {
         m_selectedItem->setProp(key, val);
     }
 
-    // Refresh geometry row
+    // Refresh the geometry row display
     m_updatingProps = true;
-    int geomRow = -1;
-    for (int i = 0; i < m_propTable->rowCount(); ++i)
+    for (int i = 0; i < m_propTable->rowCount(); ++i) {
         if (m_propTable->item(i, 0) && m_propTable->item(i, 0)->text() == "geometry")
-            geomRow = i;
-    if (geomRow >= 0 && m_propTable->item(geomRow, 1))
-        m_propTable->item(geomRow, 1)->setText(propValue(m_selectedItem, "geometry"));
+            if (m_propTable->item(i, 1))
+                m_propTable->item(i, 1)->setText(propValue(m_selectedItem, "geometry"));
+    }
     m_updatingProps = false;
 }
 
@@ -373,6 +424,7 @@ void UIDesigner::newForm() {
     if (ret == QMessageBox::Yes) {
         m_canvas->formScene()->clear();
         onItemSelected(nullptr);
+        setStatus("New form created.");
     }
 }
 
@@ -389,7 +441,6 @@ void UIDesigner::generateCode() {
     code += "' Paste into the IDE editor, then press Build & Run (Ctrl+F5)\n";
     code += "' ============================================================\n\n";
 
-    // ── 1. Variable declarations (module-level globals) ───────────────────
     if (!items.isEmpty()) {
         code += "' --- Variable declarations ---\n";
         for (auto *w : items)
@@ -397,9 +448,6 @@ void UIDesigner::generateCode() {
         code += "\n";
     }
 
-    // ── 2. Create & configure controls in the main body ───────────────────
-    // Running at module scope means assignments go to globals, so event
-    // handlers can read e.g. btn1 to get the widget ID.
     if (!items.isEmpty()) {
         code += "' --- Create controls ---\n";
         for (auto *w : items) {
@@ -412,35 +460,30 @@ void UIDesigner::generateCode() {
             code += QString("%1 = CreateControl(\"%2\", \"%3\", %4, %5, %6, %7)\n")
                     .arg(name).arg(type).arg(name).arg(x).arg(y).arg(wd).arg(ht);
 
-            // Text / title
             if (type == "Label" || type == "PushButton" || type == "CheckBox" ||
                 type == "RadioButton" || type == "GroupBox") {
                 QString txt = w->prop("text");
-                if (txt.isEmpty()) txt = name; // default caption = name
+                if (txt.isEmpty()) txt = name;
                 code += QString("SetProperty %1, \"text\", \"%2\"\n").arg(name).arg(txt);
             }
-            // Placeholder
             if (type == "LineEdit") {
                 QString ph = w->prop("placeholderText");
                 if (!ph.isEmpty())
                     code += QString("SetProperty %1, \"placeholderText\", \"%2\"\n")
                             .arg(name).arg(ph);
             }
-            // Numeric range
             if (type == "SpinBox" || type == "ProgressBar" || type == "Slider") {
                 QString mn = w->prop("minimum"), mx = w->prop("maximum"), vl = w->prop("value");
                 if (!mn.isEmpty()) code += QString("SetProperty %1, \"minimum\", \"%2\"\n").arg(name).arg(mn);
                 if (!mx.isEmpty()) code += QString("SetProperty %1, \"maximum\", \"%2\"\n").arg(name).arg(mx);
                 if (!vl.isEmpty()) code += QString("SetProperty %1, \"value\",   \"%2\"\n").arg(name).arg(vl);
             }
-            // List items (one per line in the "items" property)
             if (type == "ComboBox" || type == "ListWidget") {
                 QStringList its = w->prop("items").split('\n');
                 for (const QString &it : its)
                     if (!it.trimmed().isEmpty())
                         code += QString("AddItem %1, \"%2\"\n").arg(name).arg(it.trimmed());
             }
-            // Disabled state
             if (w->prop("enabled").toLower() == "false")
                 code += QString("SetProperty %1, \"enabled\", \"false\"\n").arg(name);
 
@@ -448,11 +491,9 @@ void UIDesigner::generateCode() {
         }
     }
 
-    // ── 3. Show the form — this blocks until the user closes the window ───
     code += "' --- Show form (blocks until closed) ---\n";
     code += QString("ShowForm \"My Form\", %1, %2\n\n").arg(fw).arg(fh);
 
-    // ── 4. Event-handler stubs ─────────────────────────────────────────────
     bool hasStubs = false;
     for (auto *w : items) {
         if (w->widgetType() == "PushButton") {
@@ -465,24 +506,30 @@ void UIDesigner::generateCode() {
         }
     }
 
-    // ── Show in viewer window ─────────────────────────────────────────────
+    // Show code in a floating viewer window
     auto *dlg = new QMainWindow(this);
     dlg->setWindowTitle("Generated Code");
+    dlg->setAttribute(Qt::WA_DeleteOnClose);
     dlg->resize(680, 560);
+
     auto *te = new QTextEdit(dlg);
-    te->setFont(QFont("Courier New", 9));
+    te->setFont(QFont("Consolas", 9));
     te->setPlainText(code);
-    te->setStyleSheet("QTextEdit { background:#1e1e2e; color:#cdd6f4; }");
+    te->setStyleSheet(
+        QString("QTextEdit { background:%1; color:#a9b7c6; }").arg(QCD::CONSOLE));
     dlg->setCentralWidget(te);
 
     auto *tb = dlg->addToolBar("Actions");
-    tb->setStyleSheet("QToolBar { background:#313244; border:none; } "
-                      "QToolButton { background:#45475a; color:#cdd6f4; "
-                      "padding:4px 10px; border-radius:3px; }");
+    tb->setStyleSheet(
+        QString("QToolBar { background:%1; border:none; } "
+                "QToolButton { background:%2; color:#a9b7c6; padding:4px 10px; border-radius:3px; }"
+                "QToolButton:hover { background:%3; }")
+        .arg(QCD::PANEL).arg(QCD::BORDER).arg(QCD::ACTIVE));
     tb->addAction("Copy All", dlg, [te]{
         QApplication::clipboard()->setText(te->toPlainText());
     });
     tb->addAction("Close", dlg, &QWidget::close);
 
     dlg->show();
+    setStatus("Code generated — copy it into the editor.");
 }

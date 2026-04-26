@@ -7,6 +7,8 @@
 #include "termrunner/vm.h"
 #include "termrunner/formruntime.h"
 #include "uidesigner/uidesigner.h"
+#include "copilot/localcopilot.h"
+#include "copilot/copilotpanel.h"
 
 #include <QMenuBar>
 #include <QToolBar>
@@ -37,6 +39,7 @@
 #include <QHBoxLayout>
 #include <QVBoxLayout>
 #include <QMetaObject>
+#include <QStackedWidget>
 
 // ── Qt Creator colour palette ─────────────────────────────────────────────
 // All colours are taken from Qt Creator's default dark theme.
@@ -83,6 +86,7 @@ MainWindow::MainWindow(QWidget *parent)
     setupUI();
     setupMenus();
     setupToolbar();
+    setupCopilot();
     setCurrentFile(QString());
     resize(1360, 820);
 }
@@ -179,23 +183,6 @@ void MainWindow::setupUI() {
     modeLayout->addWidget(m_btnModeDesign);
     modeLayout->addStretch();
 
-    // Toggle debug dock when mode changes
-    connect(m_btnModeDebug, &QToolButton::toggled, this, [this](bool on) {
-        if (on) m_debugDock->show(); else m_debugDock->hide();
-    });
-    connect(m_btnModeEdit, &QToolButton::toggled, this, [this](bool on) {
-        if (on) m_debugDock->hide();
-    });
-    // Design button opens the UI Designer window and returns to Edit when closed
-    connect(m_btnModeDesign, &QToolButton::clicked, this, [this]() {
-        auto *designer = new UIDesigner(nullptr);
-        designer->setAttribute(Qt::WA_DeleteOnClose);
-        connect(designer, &QObject::destroyed, this, [this]() {
-            m_btnModeEdit->setChecked(true); // back to Edit when window closes
-        });
-        designer->show();
-    });
-
     // ── Main vertical splitter (editor + output) ──────────────────────────
     auto *vSplit = new QSplitter(Qt::Vertical);
     vSplit->setStyleSheet(
@@ -205,14 +192,43 @@ void MainWindow::setupUI() {
     vSplit->setStretchFactor(0, 4);
     vSplit->setStretchFactor(1, 1);
 
-    // ── Centre container = modeBar + splitter ─────────────────────────────
+    // ── UI Designer (embedded, page 1 of stack) ───────────────────────────
+    m_uiDesigner = new UIDesigner(this);
+
+    // ── Stacked widget: page 0 = edit/debug, page 1 = design ─────────────
+    m_centralStack = new QStackedWidget(this);
+    m_centralStack->addWidget(vSplit);         // index 0
+    m_centralStack->addWidget(m_uiDesigner);  // index 1
+    m_centralStack->setCurrentIndex(0);
+
+    // ── Centre container = modeBar + stack ───────────────────────────────
     QWidget *centre = new QWidget(this);
     auto *hLayout = new QHBoxLayout(centre);
     hLayout->setContentsMargins(0, 0, 0, 0);
     hLayout->setSpacing(0);
     hLayout->addWidget(modeBar);
-    hLayout->addWidget(vSplit);
+    hLayout->addWidget(m_centralStack);
     setCentralWidget(centre);
+
+    // ── Mode-bar connections ──────────────────────────────────────────────
+    // Edit: show editor, hide debug dock
+    connect(m_btnModeEdit, &QToolButton::toggled, this, [this](bool on) {
+        if (!on) return;
+        m_centralStack->setCurrentIndex(0);
+        m_debugDock->hide();
+    });
+    // Debug: show editor + debug dock
+    connect(m_btnModeDebug, &QToolButton::toggled, this, [this](bool on) {
+        if (!on) return;
+        m_centralStack->setCurrentIndex(0);
+        m_debugDock->show();
+    });
+    // Design: show embedded UIDesigner, hide debug dock
+    connect(m_btnModeDesign, &QToolButton::toggled, this, [this](bool on) {
+        if (!on) return;
+        m_centralStack->setCurrentIndex(1);
+        m_debugDock->hide();
+    });
 
     // ── Debug variables dock (right side) ─────────────────────────────────
     m_watchTable = new QTableWidget(0, 3, this);
@@ -308,9 +324,24 @@ void MainWindow::setupMenus() {
     m_actStep    ->setEnabled(false);
     m_actStop    ->setEnabled(false);
 
+    // Design
+    QMenu *designMenu = menuBar()->addMenu("&Design");
+    designMenu->addAction("Switch to &Design Mode", this, &MainWindow::openUIDesigner, QKeySequence("Ctrl+D"));
+    designMenu->addSeparator();
+    designMenu->addAction("&New Form", this, [this]{
+        openUIDesigner();
+        m_uiDesigner->newForm();
+    });
+    designMenu->addAction("&Generate Code", this, [this]{
+        openUIDesigner();
+        m_uiDesigner->generateCode();
+    });
+
     // Tools
     QMenu *toolsMenu = menuBar()->addMenu("&Tools");
-    toolsMenu->addAction("&UI Designer", this, &MainWindow::openUIDesigner, QKeySequence("Ctrl+D"));
+    toolsMenu->addAction("Toggle &Copilot Chat", this, [this]{
+        m_copilotDock->setVisible(!m_copilotDock->isVisible());
+    }, QKeySequence("Ctrl+Shift+C"));
 }
 
 void MainWindow::setupToolbar() {
@@ -696,10 +727,53 @@ void MainWindow::onDebugStop() {
     // clearDebugState() will be called when VM emits executionFinished/errorOccurred
 }
 
+// ── Copilot ───────────────────────────────────────────────────────────────
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event) {
+    // Clicking the ⚡ Copilot pill in the status bar toggles the dock
+    if (obj == m_copilotLabel && event->type() == QEvent::MouseButtonPress) {
+        if (m_copilotDock)
+            m_copilotDock->setVisible(!m_copilotDock->isVisible());
+        return true;
+    }
+    return QMainWindow::eventFilter(obj, event);
+}
+
+void MainWindow::setupCopilot() {
+    // ── Fully offline template engine — no network, no external program ──
+    m_localCopilot = new LocalCopilot(this);
+
+    m_copilotPanel = new CopilotPanel(this);
+    m_copilotPanel->setEditor(m_editor);
+    m_copilotPanel->setLocalCopilot(m_localCopilot);
+
+    m_copilotDock = new QDockWidget("Copilot Chat", this);
+    m_copilotDock->setWidget(m_copilotPanel);
+    m_copilotDock->setMinimumWidth(300);
+    m_copilotDock->setStyleSheet(
+        QString("QDockWidget { color:%1; font-weight:bold; }"
+                "QDockWidget::title { background:%2; padding:6px;"
+                "  border-bottom:1px solid %3; }")
+        .arg(QC::TEXT).arg(QC::PANEL).arg(QC::BORDER));
+    addDockWidget(Qt::RightDockWidgetArea, m_copilotDock);
+    m_copilotDock->hide(); // start hidden; toggle with Ctrl+Shift+C
+
+    // ── Status-bar pill ───────────────────────────────────────────────────
+    m_copilotLabel = new QLabel("  ⚡ Copilot  ");
+    m_copilotLabel->setToolTip(
+        "Click to toggle Copilot Chat panel\n"
+        "Offline — no network or external programs required");
+    m_copilotLabel->setStyleSheet(
+        QString("QLabel { color:%1; background:transparent;"
+                "  font-size:8pt; padding:0 4px; }").arg(QC::ACCENT));
+    m_copilotLabel->setCursor(Qt::PointingHandCursor);
+    m_copilotLabel->installEventFilter(this);
+    statusBar()->addPermanentWidget(m_copilotLabel);
+}
+
 // ── UI Designer ───────────────────────────────────────────────────────────
 
 void MainWindow::openUIDesigner() {
-    auto *designer = new UIDesigner(nullptr); // top-level window
-    designer->setAttribute(Qt::WA_DeleteOnClose);
-    designer->show();
+    // Switch to embedded Design mode (same as clicking the Design button)
+    m_btnModeDesign->setChecked(true);
 }
