@@ -93,6 +93,7 @@ ASTNode *Parser::parseStatement() {
     if (t == TokenType::KW_RETURN)    return parseReturn();
     if (t == TokenType::KW_EXIT)      return parseExit();
     if (t == TokenType::KW_PRINT)     return parsePrint();
+    if (t == TokenType::KW_CALL)      return parseCallStmt();
     if (t == TokenType::IDENTIFIER)   return parseAssignOrCall();
 
     // Bare newline / colon
@@ -331,6 +332,41 @@ PrintStmt *Parser::parsePrint() {
         }
     }
     return ps;
+}
+
+// ── Call keyword ─────────────────────────────────────────────────────────
+// Handles:  Call SubName(args)  and  Call SubName args
+// Strips the Call prefix and produces a plain CallStmt — identical to what
+// parseAssignOrCall() generates, but the name is read AFTER consuming "Call".
+
+ASTNode *Parser::parseCallStmt() {
+    int line = current().line;
+    consume(); // consume KW_CALL
+
+    if (!check(TokenType::IDENTIFIER)) {
+        setError("Expected sub/function name after 'Call'");
+        return nullptr;
+    }
+    QString name = consume().value;
+
+    auto *cs    = new CallStmt(name, line);
+    bool hasParen = check(TokenType::LPAREN);
+    if (hasParen) consume();
+
+    bool hasArgs = !check(TokenType::NEWLINE)     &&
+                   !check(TokenType::COLON)        &&
+                   !check(TokenType::END_OF_FILE)  &&
+                   !(hasParen && check(TokenType::RPAREN));
+
+    if (hasArgs) {
+        cs->args.append(parseExpr());
+        while (check(TokenType::COMMA)) {
+            consume();
+            cs->args.append(parseExpr());
+        }
+    }
+    if (hasParen) expect(TokenType::RPAREN, "Expected ')'");
+    return cs;
 }
 
 // ── Assign or Call ────────────────────────────────────────────────────────

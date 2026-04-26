@@ -41,6 +41,7 @@ private:
     ASTNode  *parseExit();
     PrintStmt*parsePrint();
     ASTNode  *parseAssignOrCall();
+    ASTNode  *parseCallStmt();      // handles the  Call  keyword
 
     // ── Expression helpers (recursive-descent) ──────────────────────────
     ASTNode *parseExpr();

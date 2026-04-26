@@ -22,6 +22,7 @@ static QMap<QString, TokenType> buildKeywords() {
     m["function"] = TokenType::KW_FUNCTION;
     m["return"]   = TokenType::KW_RETURN;
     m["exit"]     = TokenType::KW_EXIT;
+    m["call"]     = TokenType::KW_CALL;
     m["and"]      = TokenType::KW_AND;
     m["or"]       = TokenType::KW_OR;
     m["not"]      = TokenType::KW_NOT;

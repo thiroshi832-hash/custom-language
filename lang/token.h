@@ -13,7 +13,7 @@ enum class TokenType {
     KW_WHILE, KW_WEND,
     KW_DO, KW_LOOP, KW_UNTIL,
     KW_SUB, KW_FUNCTION, KW_RETURN,
-    KW_EXIT,
+    KW_EXIT, KW_CALL,
     KW_AND, KW_OR, KW_NOT, KW_MOD,
     KW_TRUE, KW_FALSE, KW_NULL,
     KW_PRINT,
