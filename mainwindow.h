@@ -60,6 +60,7 @@ private:
     // Left mode bar
     QToolButton  *m_btnModeEdit   { nullptr };
     QToolButton  *m_btnModeDebug  { nullptr };
+    QToolButton  *m_btnModeDesign { nullptr };
 
     // Debug watch panel (right-side dock)
     QDockWidget  *m_debugDock     { nullptr };

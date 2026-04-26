@@ -149,19 +149,26 @@ void MainWindow::setupUI() {
                 "  background:%4; color:%5; }")
         .arg(QC::DIM).arg(QC::ACTIVE).arg(QC::ACCENT).arg(QC::ACTIVE).arg(QC::TEXT);
 
-    m_btnModeEdit  = new QToolButton();
-    m_btnModeDebug = new QToolButton();
-    m_btnModeEdit ->setStyleSheet(modeBtnSS);
-    m_btnModeDebug->setStyleSheet(modeBtnSS);
-    m_btnModeEdit ->setText("Edit");
-    m_btnModeDebug->setText("Debug");
-    m_btnModeEdit ->setCheckable(true);
-    m_btnModeDebug->setCheckable(true);
-    m_btnModeEdit ->setChecked(true);
+    m_btnModeEdit   = new QToolButton();
+    m_btnModeDebug  = new QToolButton();
+    m_btnModeDesign = new QToolButton();
+    m_btnModeEdit  ->setStyleSheet(modeBtnSS);
+    m_btnModeDebug ->setStyleSheet(modeBtnSS);
+    m_btnModeDesign->setStyleSheet(modeBtnSS);
+    m_btnModeEdit  ->setText("Edit");
+    m_btnModeDebug ->setText("Debug");
+    m_btnModeDesign->setText("Design");
+    m_btnModeEdit  ->setCheckable(true);
+    m_btnModeDebug ->setCheckable(true);
+    m_btnModeDesign->setCheckable(true);
+    m_btnModeEdit  ->setChecked(true);
 
+    // Edit and Debug are mutually exclusive; Design is independent
+    // (it opens a separate window, so we don't lock it to a single mode)
     auto *modeGroup = new QButtonGroup(modeBar);
     modeGroup->addButton(m_btnModeEdit);
     modeGroup->addButton(m_btnModeDebug);
+    modeGroup->addButton(m_btnModeDesign);
     modeGroup->setExclusive(true);
 
     auto *modeLayout = new QVBoxLayout(modeBar);
@@ -169,6 +176,7 @@ void MainWindow::setupUI() {
     modeLayout->setSpacing(2);
     modeLayout->addWidget(m_btnModeEdit);
     modeLayout->addWidget(m_btnModeDebug);
+    modeLayout->addWidget(m_btnModeDesign);
     modeLayout->addStretch();
 
     // Toggle debug dock when mode changes
@@ -177,6 +185,15 @@ void MainWindow::setupUI() {
     });
     connect(m_btnModeEdit, &QToolButton::toggled, this, [this](bool on) {
         if (on) m_debugDock->hide();
+    });
+    // Design button opens the UI Designer window and returns to Edit when closed
+    connect(m_btnModeDesign, &QToolButton::clicked, this, [this]() {
+        auto *designer = new UIDesigner(nullptr);
+        designer->setAttribute(Qt::WA_DeleteOnClose);
+        connect(designer, &QObject::destroyed, this, [this]() {
+            m_btnModeEdit->setChecked(true); // back to Edit when window closes
+        });
+        designer->show();
     });
 
     // ── Main vertical splitter (editor + output) ──────────────────────────
@@ -347,9 +364,7 @@ void MainWindow::setupToolbar() {
     tb->addAction(m_actStop);
     tb->addSeparator();
 
-    // Tools
-    auto *actUI = tb->addAction("  UI Designer  ", this, &MainWindow::openUIDesigner);
-    actUI->setShortcut(QKeySequence("Ctrl+D"));
+    // (UI Designer is in the left mode bar; keep it in the Tools menu via Ctrl+D)
 
     // Colour the "Run" and "Debug" buttons with a subtle green/blue tint
     // to match Qt Creator's prominent build buttons
