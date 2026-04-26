@@ -23,19 +23,31 @@ SyntaxHighlighter::SyntaxHighlighter(QTextDocument *parent)
         m_rules.append(rule);
     }
 
-    // Built-in function names
+    // Also highlight Call as a keyword
+    rule.pattern = QRegularExpression("\\bCall\\b", QRegularExpression::CaseInsensitiveOption);
+    rule.format  = kwFmt;
+    m_rules.append(rule);
+
+    // Built-in function names (standard + form UI)
     QTextCharFormat builtinFmt;
     builtinFmt.setForeground(QColor("#dcdcaa"));
     const QStringList builtins = {
+        // String
         "\\bLen\\b", "\\bLeft\\b", "\\bRight\\b", "\\bMid\\b",
         "\\bUCase\\b", "\\bLCase\\b", "\\bTrim\\b", "\\bLTrim\\b", "\\bRTrim\\b",
         "\\bInStr\\b", "\\bReplace\\b", "\\bString\\b", "\\bSpace\\b", "\\bStrReverse\\b",
+        // Math
         "\\bAbs\\b", "\\bInt\\b", "\\bFix\\b", "\\bSgn\\b", "\\bSqr\\b",
         "\\bLog\\b", "\\bExp\\b", "\\bSin\\b", "\\bCos\\b", "\\bTan\\b", "\\bAtn\\b",
         "\\bRnd\\b", "\\bRandomize\\b",
+        // Conversion
         "\\bCStr\\b", "\\bCInt\\b", "\\bCLng\\b", "\\bCDbl\\b", "\\bCBool\\b",
         "\\bVal\\b", "\\bStr\\b",
-        "\\bIsNumeric\\b", "\\bIsNull\\b", "\\bIsEmpty\\b", "\\bTypeName\\b"
+        // Type checks
+        "\\bIsNumeric\\b", "\\bIsNull\\b", "\\bIsEmpty\\b", "\\bTypeName\\b",
+        // Form / UI built-ins
+        "\\bCreateControl\\b", "\\bSetProperty\\b", "\\bGetProperty\\b",
+        "\\bAddItem\\b", "\\bShowForm\\b", "\\bInitForm\\b"
     };
     for (const QString &fn : builtins) {
         rule.pattern = QRegularExpression(fn, QRegularExpression::CaseInsensitiveOption);

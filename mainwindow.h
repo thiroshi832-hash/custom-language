@@ -10,6 +10,7 @@ class QLabel;
 class QAction;
 class QTableWidget;
 class QDockWidget;
+class QToolButton;
 class FormRuntime;
 class VM;
 
@@ -54,6 +55,11 @@ private:
     QTextEdit    *m_bytecodeView  { nullptr };
     QTabWidget   *m_bottomTabs    { nullptr };
     QLabel       *m_statusLabel   { nullptr };
+    QLabel       *m_cursorLabel   { nullptr };  // line:col indicator
+
+    // Left mode bar
+    QToolButton  *m_btnModeEdit   { nullptr };
+    QToolButton  *m_btnModeDebug  { nullptr };
 
     // Debug watch panel (right-side dock)
     QDockWidget  *m_debugDock     { nullptr };

@@ -66,7 +66,7 @@ void CodeEditor::highlightCurrentLine() {
     QList<QTextEdit::ExtraSelection> sels;
     if (!isReadOnly()) {
         QTextEdit::ExtraSelection sel;
-        sel.format.setBackground(QColor("#2a2a3a"));
+        sel.format.setBackground(QColor("#323232")); // Qt Creator current-line colour
         sel.format.setProperty(QTextFormat::FullWidthSelection, true);
         sel.cursor = textCursor();
         sel.cursor.clearSelection();
@@ -140,7 +140,7 @@ void CodeEditor::lineNumberAreaMousePressEvent(QMouseEvent *event) {
 
 void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
     QPainter painter(m_lineNumberArea);
-    painter.fillRect(event->rect(), QColor("#1e1e2e"));
+    painter.fillRect(event->rect(), QColor("#313335")); // Qt Creator gutter
 
     QTextBlock block  = firstVisibleBlock();
     int        bnum   = block.blockNumber();
@@ -179,7 +179,7 @@ void CodeEditor::lineNumberAreaPaintEvent(QPaintEvent *event) {
             }
 
             // ── Line number ───────────────────────────────────────────────
-            painter.setPen(QColor("#6e6e8e"));
+            painter.setPen(QColor("#606366")); // Qt Creator line-number colour
             painter.drawText(BP_AREA, top,
                              m_lineNumberArea->width() - BP_AREA - 2,
                              lh, Qt::AlignRight,

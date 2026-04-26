@@ -32,81 +32,172 @@
 #include <QTableWidget>
 #include <QHeaderView>
 #include <QDockWidget>
+#include <QToolButton>
+#include <QButtonGroup>
+#include <QHBoxLayout>
+#include <QVBoxLayout>
 #include <QMetaObject>
+
+// ── Qt Creator colour palette ─────────────────────────────────────────────
+// All colours are taken from Qt Creator's default dark theme.
+namespace QC {
+    static const char BG[]        = "#2b2b2b";   // main background
+    static const char PANEL[]     = "#3c3f41";   // panels / sidebar
+    static const char ACTIVE[]    = "#4e5254";   // hover / active tab
+    static const char BORDER[]    = "#323232";   // borders / separators
+    static const char TEXT[]      = "#a9b7c6";   // main text
+    static const char DIM[]       = "#606366";   // dim text / line numbers
+    static const char ACCENT[]    = "#3592c4";   // blue accent
+    static const char EDITOR_BG[] = "#2b2b2b";   // editor background
+    static const char SEL_BG[]    = "#214283";   // selection background
+    static const char CURLINE[]   = "#323232";   // current-line highlight
+    static const char CONSOLE[]   = "#1e1e1e";   // console/output background
+    static const char CON_TEXT[]  = "#a9b7c6";   // console text
+}
 
 // ── Constructor ───────────────────────────────────────────────────────────
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent), m_modified(false)
 {
-    // FormRuntime lives on the main thread; the VM (worker) calls it via
-    // BlockingQueuedConnection so widgets are always created on the right thread.
     m_formRuntime = new FormRuntime(this);
+
+    // Application-wide palette (Qt Creator dark)
+    QPalette p;
+    p.setColor(QPalette::Window,          QColor(QC::PANEL));
+    p.setColor(QPalette::WindowText,      QColor(QC::TEXT));
+    p.setColor(QPalette::Base,            QColor(QC::BG));
+    p.setColor(QPalette::AlternateBase,   QColor(QC::PANEL));
+    p.setColor(QPalette::Text,            QColor(QC::TEXT));
+    p.setColor(QPalette::Button,          QColor(QC::PANEL));
+    p.setColor(QPalette::ButtonText,      QColor(QC::TEXT));
+    p.setColor(QPalette::Highlight,       QColor(QC::ACCENT));
+    p.setColor(QPalette::HighlightedText, QColor("#ffffff"));
+    p.setColor(QPalette::Mid,             QColor(QC::BORDER));
+    p.setColor(QPalette::Dark,            QColor(QC::BORDER));
+    p.setColor(QPalette::Shadow,          QColor("#1a1a1a"));
+    p.setColor(QPalette::ToolTipBase,     QColor(QC::ACTIVE));
+    p.setColor(QPalette::ToolTipText,     QColor(QC::TEXT));
+    qApp->setPalette(p);
 
     setupUI();
     setupMenus();
     setupToolbar();
     setCurrentFile(QString());
-    resize(1280, 780);
-
-    // Dark palette
-    QPalette p = qApp->palette();
-    p.setColor(QPalette::Window,          QColor("#1e1e2e"));
-    p.setColor(QPalette::WindowText,      QColor("#cdd6f4"));
-    p.setColor(QPalette::Base,            QColor("#181825"));
-    p.setColor(QPalette::AlternateBase,   QColor("#1e1e2e"));
-    p.setColor(QPalette::Text,            QColor("#cdd6f4"));
-    p.setColor(QPalette::Button,          QColor("#313244"));
-    p.setColor(QPalette::ButtonText,      QColor("#cdd6f4"));
-    p.setColor(QPalette::Highlight,       QColor("#89b4fa"));
-    p.setColor(QPalette::HighlightedText, QColor("#1e1e2e"));
-    setPalette(p);
+    resize(1360, 820);
 }
 
 // ── UI Setup ──────────────────────────────────────────────────────────────
 
 void MainWindow::setupUI() {
-    // Code editor
+    // ── Code editor ───────────────────────────────────────────────────────
     m_editor = new CodeEditor(this);
     m_editor->setStyleSheet(
-        "QPlainTextEdit { background: #1e1e2e; color: #cdd6f4; "
-        "selection-background-color: #45475a; border: none; }");
+        QString("QPlainTextEdit { background:%1; color:%2; "
+                "selection-background-color:%3; border:none; }")
+        .arg(QC::EDITOR_BG).arg(QC::TEXT).arg(QC::SEL_BG));
     new SyntaxHighlighter(m_editor->document());
 
-    // Console output
+    // ── Console output ────────────────────────────────────────────────────
     m_console = new QTextEdit(this);
     m_console->setReadOnly(true);
-    m_console->setFont(QFont("Courier New", 9));
+    m_console->setFont(QFont("Consolas", 9));
     m_console->setStyleSheet(
-        "QTextEdit { background: #11111b; color: #a6e3a1; border: none; }");
+        QString("QTextEdit { background:%1; color:%2; border:none; }")
+        .arg(QC::CONSOLE).arg(QC::CON_TEXT));
 
-    // Bytecode view
+    // ── Bytecode view ─────────────────────────────────────────────────────
     m_bytecodeView = new QTextEdit(this);
     m_bytecodeView->setReadOnly(true);
-    m_bytecodeView->setFont(QFont("Courier New", 9));
+    m_bytecodeView->setFont(QFont("Consolas", 9));
     m_bytecodeView->setStyleSheet(
-        "QTextEdit { background: #11111b; color: #89dceb; border: none; }");
+        QString("QTextEdit { background:%1; color:#5f9ea0; border:none; }")
+        .arg(QC::CONSOLE));
 
-    // Bottom tabs
+    // ── Bottom output pane ────────────────────────────────────────────────
     m_bottomTabs = new QTabWidget(this);
-    m_bottomTabs->addTab(m_console,      "Console");
-    m_bottomTabs->addTab(m_bytecodeView, "Bytecode");
+    m_bottomTabs->addTab(m_console,      "  Application Output  ");
+    m_bottomTabs->addTab(m_bytecodeView, "  Bytecode  ");
     m_bottomTabs->setStyleSheet(
-        "QTabWidget::pane { border: none; } "
-        "QTabBar::tab { background: #313244; color: #cdd6f4; padding: 4px 12px; } "
-        "QTabBar::tab:selected { background: #45475a; }");
-    m_bottomTabs->setMaximumHeight(220);
+        QString("QTabWidget::pane { border-top:1px solid %1; background:%2; } "
+                "QTabBar::tab { background:%3; color:%4; padding:5px 14px; "
+                "  border:none; border-top:2px solid transparent; } "
+                "QTabBar::tab:selected { background:%2; color:#ffffff; "
+                "  border-top:2px solid %5; } "
+                "QTabBar::tab:hover:!selected { background:%6; } ")
+        .arg(QC::BORDER).arg(QC::CONSOLE).arg(QC::PANEL)
+        .arg(QC::DIM).arg(QC::ACCENT).arg(QC::ACTIVE));
+    m_bottomTabs->setMaximumHeight(200);
 
-    // Splitter: editor top, tabs bottom
-    auto *splitter = new QSplitter(Qt::Vertical, this);
-    splitter->addWidget(m_editor);
-    splitter->addWidget(m_bottomTabs);
-    splitter->setStretchFactor(0, 3);
-    splitter->setStretchFactor(1, 1);
+    // ── Left mode bar (Qt Creator style) ─────────────────────────────────
+    QWidget *modeBar = new QWidget();
+    modeBar->setFixedWidth(54);
+    modeBar->setStyleSheet(
+        QString("QWidget { background:%1; border-right:1px solid %2; }")
+        .arg(QC::PANEL).arg(QC::BORDER));
 
-    setCentralWidget(splitter);
+    QString modeBtnSS =
+        QString("QToolButton {"
+                "  background:transparent; color:%1;"
+                "  border:none; border-left:3px solid transparent;"
+                "  font-size:8pt; font-weight:bold;"
+                "  padding:10px 0px; min-width:54px; min-height:54px; }"
+                "QToolButton:checked {"
+                "  background:%2; color:#ffffff;"
+                "  border-left:3px solid %3; }"
+                "QToolButton:hover:!checked {"
+                "  background:%4; color:%5; }")
+        .arg(QC::DIM).arg(QC::ACTIVE).arg(QC::ACCENT).arg(QC::ACTIVE).arg(QC::TEXT);
 
-    // ── Debug watch panel (right-side dock) ──────────────────────────────
+    m_btnModeEdit  = new QToolButton();
+    m_btnModeDebug = new QToolButton();
+    m_btnModeEdit ->setStyleSheet(modeBtnSS);
+    m_btnModeDebug->setStyleSheet(modeBtnSS);
+    m_btnModeEdit ->setText("Edit");
+    m_btnModeDebug->setText("Debug");
+    m_btnModeEdit ->setCheckable(true);
+    m_btnModeDebug->setCheckable(true);
+    m_btnModeEdit ->setChecked(true);
+
+    auto *modeGroup = new QButtonGroup(modeBar);
+    modeGroup->addButton(m_btnModeEdit);
+    modeGroup->addButton(m_btnModeDebug);
+    modeGroup->setExclusive(true);
+
+    auto *modeLayout = new QVBoxLayout(modeBar);
+    modeLayout->setContentsMargins(0, 6, 0, 6);
+    modeLayout->setSpacing(2);
+    modeLayout->addWidget(m_btnModeEdit);
+    modeLayout->addWidget(m_btnModeDebug);
+    modeLayout->addStretch();
+
+    // Toggle debug dock when mode changes
+    connect(m_btnModeDebug, &QToolButton::toggled, this, [this](bool on) {
+        if (on) m_debugDock->show(); else m_debugDock->hide();
+    });
+    connect(m_btnModeEdit, &QToolButton::toggled, this, [this](bool on) {
+        if (on) m_debugDock->hide();
+    });
+
+    // ── Main vertical splitter (editor + output) ──────────────────────────
+    auto *vSplit = new QSplitter(Qt::Vertical);
+    vSplit->setStyleSheet(
+        QString("QSplitter::handle { background:%1; height:1px; }").arg(QC::BORDER));
+    vSplit->addWidget(m_editor);
+    vSplit->addWidget(m_bottomTabs);
+    vSplit->setStretchFactor(0, 4);
+    vSplit->setStretchFactor(1, 1);
+
+    // ── Centre container = modeBar + splitter ─────────────────────────────
+    QWidget *centre = new QWidget(this);
+    auto *hLayout = new QHBoxLayout(centre);
+    hLayout->setContentsMargins(0, 0, 0, 0);
+    hLayout->setSpacing(0);
+    hLayout->addWidget(modeBar);
+    hLayout->addWidget(vSplit);
+    setCentralWidget(centre);
+
+    // ── Debug variables dock (right side) ─────────────────────────────────
     m_watchTable = new QTableWidget(0, 3, this);
     m_watchTable->setHorizontalHeaderLabels({"Name", "Value", "Scope"});
     m_watchTable->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
@@ -115,28 +206,47 @@ void MainWindow::setupUI() {
     m_watchTable->setEditTriggers(QAbstractItemView::NoEditTriggers);
     m_watchTable->setSelectionBehavior(QAbstractItemView::SelectRows);
     m_watchTable->setAlternatingRowColors(true);
+    m_watchTable->setFont(QFont("Consolas", 9));
     m_watchTable->setStyleSheet(
-        "QTableWidget { background: #181825; color: #cdd6f4; "
-        "gridline-color: #313244; border: none; } "
-        "QTableWidget::item:alternate { background: #1e1e2e; } "
-        "QHeaderView::section { background: #313244; color: #cdd6f4; "
-        "padding: 3px; border: none; } ");
-    m_watchTable->setFont(QFont("Courier New", 9));
+        QString("QTableWidget { background:%1; color:%2; "
+                "  gridline-color:%3; border:none; }"
+                "QTableWidget::item:alternate { background:%4; }"
+                "QHeaderView::section { background:%5; color:%6; "
+                "  padding:4px; border:none; border-bottom:1px solid %3; }")
+        .arg(QC::BG).arg(QC::TEXT).arg(QC::BORDER)
+        .arg(QC::PANEL).arg(QC::PANEL).arg(QC::TEXT));
 
-    m_debugDock = new QDockWidget("Variables", this);
+    m_debugDock = new QDockWidget("Local && Global Variables", this);
     m_debugDock->setWidget(m_watchTable);
-    m_debugDock->setMinimumWidth(260);
+    m_debugDock->setMinimumWidth(270);
     m_debugDock->setStyleSheet(
-        "QDockWidget { color: #cdd6f4; } "
-        "QDockWidget::title { background: #313244; padding: 4px; } ");
+        QString("QDockWidget { color:%1; font-weight:bold; }"
+                "QDockWidget::title { background:%2; padding:6px; "
+                "  border-bottom:1px solid %3; }")
+        .arg(QC::TEXT).arg(QC::PANEL).arg(QC::BORDER));
     addDockWidget(Qt::RightDockWidgetArea, m_debugDock);
-    m_debugDock->hide(); // shown only when debugger is active
+    m_debugDock->hide();
 
-    // Status bar label
-    m_statusLabel = new QLabel("Ready");
-    statusBar()->addPermanentWidget(m_statusLabel);
+    // ── Status bar ────────────────────────────────────────────────────────
     statusBar()->setStyleSheet(
-        "QStatusBar { background: #313244; color: #cdd6f4; }");
+        QString("QStatusBar { background:%1; color:%2; border-top:1px solid %3; }"
+                "QStatusBar::item { border:none; }")
+        .arg(QC::PANEL).arg(QC::TEXT).arg(QC::BORDER));
+
+    m_statusLabel = new QLabel("Ready");
+    m_cursorLabel = new QLabel("Ln 1, Col 1");
+    m_cursorLabel->setStyleSheet(QString("color:%1;").arg(QC::DIM));
+    statusBar()->addWidget(m_statusLabel);
+    statusBar()->addPermanentWidget(m_cursorLabel);
+
+    // Update cursor position label
+    connect(m_editor, &CodeEditor::cursorPositionChanged, this, [this]() {
+        QTextCursor c = m_editor->textCursor();
+        m_cursorLabel->setText(
+            QString("Ln %1, Col %2")
+            .arg(c.blockNumber() + 1)
+            .arg(c.columnNumber() + 1));
+    });
 
     // Track modifications
     connect(m_editor->document(), &QTextDocument::modificationChanged,
@@ -144,83 +254,117 @@ void MainWindow::setupUI() {
 }
 
 void MainWindow::setupMenus() {
-    // File menu
+    QString menuSS =
+        QString("QMenuBar { background:%1; color:%2; padding:2px 0; spacing:0; }"
+                "QMenuBar::item { padding:4px 10px; background:transparent; }"
+                "QMenuBar::item:selected { background:%3; }"
+                "QMenu { background:%1; color:%2; border:1px solid %4; }"
+                "QMenu::item { padding:5px 24px 5px 12px; }"
+                "QMenu::item:selected { background:%3; }"
+                "QMenu::separator { height:1px; background:%4; margin:3px 0; }")
+        .arg(QC::PANEL).arg(QC::TEXT).arg(QC::ACTIVE).arg(QC::BORDER);
+    menuBar()->setStyleSheet(menuSS);
+
+    // File
     QMenu *fileMenu = menuBar()->addMenu("&File");
-    m_actNew    = fileMenu->addAction("&New",         this, &MainWindow::newFile,    QKeySequence::New);
-    m_actOpen   = fileMenu->addAction("&Open...",     this, &MainWindow::openFile,   QKeySequence::Open);
-    m_actSave   = fileMenu->addAction("&Save",        this, &MainWindow::saveFile,   QKeySequence::Save);
-    m_actSaveAs = fileMenu->addAction("Save &As...",  this, &MainWindow::saveFileAs, QKeySequence::SaveAs);
+    m_actNew    = fileMenu->addAction("&New",        this, &MainWindow::newFile,    QKeySequence::New);
+    m_actOpen   = fileMenu->addAction("&Open...",    this, &MainWindow::openFile,   QKeySequence::Open);
+    m_actSave   = fileMenu->addAction("&Save",       this, &MainWindow::saveFile,   QKeySequence::Save);
+    m_actSaveAs = fileMenu->addAction("Save &As...", this, &MainWindow::saveFileAs, QKeySequence::SaveAs);
     fileMenu->addSeparator();
     fileMenu->addAction("E&xit", qApp, &QApplication::quit, QKeySequence::Quit);
 
-    // Build menu
+    // Build
     QMenu *buildMenu = menuBar()->addMenu("&Build");
-    m_actBuild    = buildMenu->addAction("&Build",         this, &MainWindow::buildCode,   QKeySequence("F7"));
-    m_actRun      = buildMenu->addAction("&Run",           this, &MainWindow::runCode,     QKeySequence("F5"));
-    m_actBuildRun = buildMenu->addAction("Build && &Run",  this, &MainWindow::buildAndRun, QKeySequence("Ctrl+F5"));
+    m_actBuild    = buildMenu->addAction("&Build",        this, &MainWindow::buildCode,   QKeySequence("F7"));
+    m_actRun      = buildMenu->addAction("&Run",          this, &MainWindow::runCode,     QKeySequence("F5"));
+    m_actBuildRun = buildMenu->addAction("Build && &Run", this, &MainWindow::buildAndRun, QKeySequence("Ctrl+F5"));
 
-    // Debug menu
+    // Debug
     QMenu *debugMenu = menuBar()->addMenu("&Debug");
-    m_actDebugRun = debugMenu->addAction("Debug && Run",   this, &MainWindow::debugRun,       QKeySequence("F6"));
+    m_actDebugRun = debugMenu->addAction("Debug && Run",   this, &MainWindow::debugRun,        QKeySequence("F6"));
     debugMenu->addSeparator();
     m_actContinue = debugMenu->addAction("&Continue",      this, &MainWindow::onDebugContinue, QKeySequence("F8"));
     m_actStep     = debugMenu->addAction("Step &Over",     this, &MainWindow::onDebugStep,     QKeySequence("F10"));
     m_actStop     = debugMenu->addAction("&Stop Debugger", this, &MainWindow::onDebugStop);
-
     m_actContinue->setEnabled(false);
-    m_actStep->setEnabled(false);
-    m_actStop->setEnabled(false);
+    m_actStep    ->setEnabled(false);
+    m_actStop    ->setEnabled(false);
 
-    // Tools menu
+    // Tools
     QMenu *toolsMenu = menuBar()->addMenu("&Tools");
     toolsMenu->addAction("&UI Designer", this, &MainWindow::openUIDesigner, QKeySequence("Ctrl+D"));
-
-    menuBar()->setStyleSheet(
-        "QMenuBar { background: #313244; color: #cdd6f4; } "
-        "QMenuBar::item:selected { background: #45475a; } "
-        "QMenu { background: #313244; color: #cdd6f4; } "
-        "QMenu::item:selected { background: #45475a; }");
 }
 
 void MainWindow::setupToolbar() {
-    QString tbStyle =
-        "QToolBar { background: #313244; border: none; spacing: 4px; padding: 2px; } "
-        "QToolButton { background: #45475a; color: #cdd6f4; padding: 4px 10px; "
-        "border-radius: 3px; min-width: 50px; } "
-        "QToolButton:hover { background: #585b70; } "
-        "QToolButton:pressed { background: #6c7086; } "
-        "QToolButton:disabled { color: #585b70; background: #313244; }";
+    // Qt Creator uses a flat, compact toolbar with no border-radius
+    QString tbSS =
+        QString("QToolBar { background:%1; border:none; border-bottom:1px solid %2;"
+                "  spacing:1px; padding:2px 4px; }"
+                "QToolButton { background:transparent; color:%3;"
+                "  border:none; padding:4px 8px; font-size:9pt; }"
+                "QToolButton:hover { background:%4; }"
+                "QToolButton:pressed { background:%5; }"
+                "QToolButton:disabled { color:%6; }"
+                "QToolBar::separator { background:%2; width:1px; margin:4px 4px; }")
+        .arg(QC::PANEL).arg(QC::BORDER).arg(QC::TEXT)
+        .arg(QC::ACTIVE).arg(QC::BORDER).arg(QC::DIM);
 
     QToolBar *tb = addToolBar("Main");
     tb->setMovable(false);
-    tb->setStyleSheet(tbStyle);
+    tb->setIconSize(QSize(16, 16));
+    tb->setStyleSheet(tbSS);
 
+    // File actions
+    m_actNew ->setShortcut(QKeySequence::New);
+    m_actOpen->setShortcut(QKeySequence::Open);
+    m_actSave->setShortcut(QKeySequence::Save);
     tb->addAction(m_actNew);
     tb->addAction(m_actOpen);
     tb->addAction(m_actSave);
     tb->addSeparator();
 
-    m_actBuild->setText("Build (F7)");
-    m_actRun->setText("Run (F5)");
-    m_actBuildRun->setText("Build & Run");
+    // Build / Run
+    m_actBuild   ->setText("  Build  ");
+    m_actRun     ->setText("  Run  ");
+    m_actBuildRun->setText("  Build && Run  ");
     tb->addAction(m_actBuild);
     tb->addAction(m_actRun);
     tb->addAction(m_actBuildRun);
     tb->addSeparator();
 
-    m_actDebugRun->setText("Debug (F6)");
+    // Debug
+    m_actDebugRun->setText("  Debug  ");
     tb->addAction(m_actDebugRun);
     tb->addSeparator();
 
-    m_actContinue->setText("Continue (F8)");
-    m_actStep->setText("Step (F10)");
-    m_actStop->setText("Stop");
+    // Debug controls (enabled only when paused)
+    m_actContinue->setText("  Continue  ");
+    m_actStep    ->setText("  Step Over  ");
+    m_actStop    ->setText("  Stop  ");
     tb->addAction(m_actContinue);
     tb->addAction(m_actStep);
     tb->addAction(m_actStop);
     tb->addSeparator();
 
-    tb->addAction("UI Designer", this, &MainWindow::openUIDesigner);
+    // Tools
+    auto *actUI = tb->addAction("  UI Designer  ", this, &MainWindow::openUIDesigner);
+    actUI->setShortcut(QKeySequence("Ctrl+D"));
+
+    // Colour the "Run" and "Debug" buttons with a subtle green/blue tint
+    // to match Qt Creator's prominent build buttons
+    if (QToolButton *btn = qobject_cast<QToolButton*>(tb->widgetForAction(m_actRun)))
+        btn->setStyleSheet(
+            QString("QToolButton { color:#57a64a; background:transparent;"
+                    "  border:none; padding:4px 8px; }"
+                    "QToolButton:hover { background:%1; }"
+                    "QToolButton:disabled { color:%2; }").arg(QC::ACTIVE).arg(QC::DIM));
+    if (QToolButton *btn = qobject_cast<QToolButton*>(tb->widgetForAction(m_actDebugRun)))
+        btn->setStyleSheet(
+            QString("QToolButton { color:%1; background:transparent;"
+                    "  border:none; padding:4px 8px; }"
+                    "QToolButton:hover { background:%2; }"
+                    "QToolButton:disabled { color:%3; }").arg(QC::ACCENT).arg(QC::ACTIVE).arg(QC::DIM));
 }
 
 // ── File operations ───────────────────────────────────────────────────────
@@ -402,7 +546,7 @@ void MainWindow::debugRun() {
 
     m_console->clear();
     m_bottomTabs->setCurrentIndex(0);
-    m_debugDock->show();
+    m_btnModeDebug->setChecked(true); // switches to Debug mode, shows dock
     m_watchTable->setRowCount(0);
 
     m_actRun->setEnabled(false);
@@ -461,15 +605,17 @@ void MainWindow::onVMFinished() {
 }
 
 void MainWindow::clearDebugState() {
-    m_actRun->setEnabled(true);
+    m_actRun     ->setEnabled(true);
     m_actBuildRun->setEnabled(true);
-    m_actBuild->setEnabled(true);
+    m_actBuild   ->setEnabled(true);
     m_actDebugRun->setEnabled(true);
     m_actContinue->setEnabled(false);
-    m_actStep->setEnabled(false);
-    m_actStop->setEnabled(false);
+    m_actStep    ->setEnabled(false);
+    m_actStop    ->setEnabled(false);
     m_editor->setDebugLine(0);
     m_debugVM = nullptr;
+    // Return mode bar to Edit
+    m_btnModeEdit->setChecked(true);
 }
 
 // ── Debugger pause/control ────────────────────────────────────────────────
